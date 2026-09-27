@@ -1,0 +1,6 @@
+{
+  "name": "LedgerFlow AP & Financial Oversight",
+  "description": "Enterprise Accounts Payable & Receivable system with automated invoice processing, approval workflows, real-time analytics, bulk payments, multi-currency, and audit reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
