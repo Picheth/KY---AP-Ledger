@@ -64,12 +64,12 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const STORAGE_KEY_INVOICES = 'ledgerflow_shop_vendors_v7';
-const STORAGE_KEY_VENDORS = 'ledgerflow_shop_vendors_v7_vnd';
-const STORAGE_KEY_NOTIFS = 'ledgerflow_shop_vendors_v7_notif';
-const STORAGE_KEY_ROLE = 'ledgerflow_shop_vendors_v7_role';
-const STORAGE_KEY_CURR = 'ledgerflow_shop_vendors_v7_curr';
-const STORAGE_KEY_BATCHES = 'ledgerflow_shop_vendors_v7_batch';
+const STORAGE_KEY_INVOICES = 'ledgerflow_real_ledger_v8';
+const STORAGE_KEY_VENDORS = 'ledgerflow_real_ledger_v8_vnd';
+const STORAGE_KEY_NOTIFS = 'ledgerflow_real_ledger_v8_notif';
+const STORAGE_KEY_ROLE = 'ledgerflow_real_ledger_v8_role';
+const STORAGE_KEY_CURR = 'ledgerflow_real_ledger_v8_curr';
+const STORAGE_KEY_BATCHES = 'ledgerflow_real_ledger_v8_batch';
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
