@@ -57,6 +57,28 @@ export interface PartialPaymentRecord {
   remainingBalanceAfter: number;
 }
 
+export interface StandalonePaymentRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  supplier: string;
+  amount: number;
+  paymentMethod: PaymentMethod | string;
+  reference: string;
+  notes?: string;
+}
+
+export interface DailyReportRow {
+  id: string;
+  date: string; // YYYY-MM-DD
+  supplier: string;
+  totalPurchase: number;
+  totalPayment: number;
+  invoicesCount: number;
+  paymentsCount: number;
+  invoices?: Invoice[];
+  payments?: { amount: number; reference: string; notes?: string }[];
+}
+
 export interface SettlementAllocationItem {
   invoiceId: string;
   invoiceNumber: string;

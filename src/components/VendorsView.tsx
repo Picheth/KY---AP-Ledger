@@ -60,6 +60,7 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
 
   const getVendorInvoiceFormat = (name: string) => {
     if (name.includes('S4')) return 'S4-YYYYMMDD';
+    if (name.includes('PLP-NEW')) return 'PLN-xxxxx';
     if (name.includes('PLP')) return 'PLP-xxxxx';
     if (name.includes('PLN')) return 'PLN-xxxxx';
     if (name.includes('DN')) return 'DN-xxxxx';

@@ -42,10 +42,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const navLinks = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'invoices', label: 'Invoices & AP' },
-    { id: 'approvals', label: 'Approval Queue' },
-    { id: 'vendors', label: 'Vendors' },
-    { id: 'reminders', label: 'Reminders & Dunning' },
+    { id: 'invoices', label: 'Invoices' },
+    { id: 'vendors', label: 'Suppliers' },
+    { id: 'purchases', label: 'Purchases' },
+    { id: 'settlement', label: 'Settlement' },
+    { id: 'daily-report', label: 'Daily Report' },
+    { id: 'settlement-report', label: 'Settlement Report' },
   ];
 
   const rolesList: { role: UserRole; name: string; title: string; limit: string }[] = [
@@ -85,7 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Zone 2: Clean text navigation links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
+          <nav className="hidden md:flex items-center gap-4 lg:gap-5 text-sm font-medium text-slate-600">
             {navLinks.map((link) => {
               const isActive = activeTab === link.id;
               return (
@@ -94,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => setActiveTab(link.id)}
                   className={`py-1.5 transition-colors whitespace-nowrap ${
                     isActive
-                      ? 'text-slate-900 font-semibold border-b-2 border-slate-900'
+                      ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
                       : 'hover:text-slate-900'
                   }`}
                 >

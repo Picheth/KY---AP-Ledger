@@ -83,8 +83,8 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
       ],
     },
     {
-      label: '📱 S3 PLN (Brand New Mobile Phone) - PLN-xxxxx',
-      vendor: 'S3 PLN',
+      label: '📱 S3 PLP-NEW (Brand New Mobile Phone) - PLN-xxxxx',
+      vendor: 'S3 PLP-NEW',
       category: 'Mobile Phone (New)',
       invNum: `PLN-${Math.floor(10000 + Math.random() * 90000)}`,
       poNum: 'PO-2026-PLN-201',
@@ -348,7 +348,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                   required
                   value={vendorName}
                   onChange={(e) => setVendorName(e.target.value)}
-                  placeholder="e.g. S4 LH, S3 PLP, S3 PLN, S5 DN, S13 SV, S9 Falcon"
+                  placeholder="e.g. S4 LH, S3 PLP, S3 PLP-NEW, S5 DN, S13 SV, S9 Falcon"
                   className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:border-slate-500"
                 />
                 {/* Shop Vendors Quick Pick */}
@@ -357,7 +357,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                   {[
                     { name: 'S4 LH', category: 'Mobile Phones, Tablets and Accessories', format: 'S4-YYYYMMDD', genInv: () => `S4-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}` },
                     { name: 'S3 PLP', category: 'Mobile Phones (second-hand)', format: 'PLP-xxxxx', genInv: () => `PLP-${Math.floor(10000 + Math.random() * 90000)}` },
-                    { name: 'S3 PLN', category: 'Mobile Phone (New)', format: 'PLN-xxxxx', genInv: () => `PLN-${Math.floor(10000 + Math.random() * 90000)}` },
+                    { name: 'S3 PLP-NEW', category: 'Mobile Phone (New)', format: 'PLN-xxxxx', genInv: () => `PLN-${Math.floor(10000 + Math.random() * 90000)}` },
                     { name: 'S5 DN', category: 'Accessories', format: 'DN-xxxxx', genInv: () => `DN-${Math.floor(10000 + Math.random() * 90000)}` },
                     { name: 'S13 SV', category: 'Mobile Phones (new and second-hand)', format: 'SV-xxxxx', genInv: () => `SV-${Math.floor(10000 + Math.random() * 90000)}` },
                     { name: 'S9 Falcon', category: 'Mobile phones, tablets, laptops, accessories', format: 'FAL-xxxxx', genInv: () => `FAL-${Math.floor(10000 + Math.random() * 90000)}` },
@@ -394,7 +394,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                 >
                   <option value="Mobile Phones, Tablets and Accessories">Mobile Phones, Tablets and Accessories (S4 LH)</option>
                   <option value="Mobile Phones (second-hand)">Mobile Phones (second-hand) (S3 PLP)</option>
-                  <option value="Mobile Phone (New)">Mobile Phone (New) (S3 PLN)</option>
+                  <option value="Mobile Phone (New)">Mobile Phone (New) (S3 PLP-NEW)</option>
                   <option value="Accessories">Accessories (S5 DN)</option>
                   <option value="Mobile Phones (new and second-hand)">Mobile Phones (new and second-hand) (S13 SV)</option>
                   <option value="Mobile phones, tablets, laptops, accessories">Mobile phones, tablets, laptops, accessories (S9 Falcon)</option>
@@ -502,13 +502,73 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
 
               {/* Issue Date */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Issue Date
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Issue Date (Backdating allowed)
+                  </label>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        setIssueDate(today);
+                        setDueDate(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() - 1);
+                        const s = d.toISOString().slice(0, 10);
+                        setIssueDate(s);
+                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      Yesterday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() - 7);
+                        const s = d.toISOString().slice(0, 10);
+                        setIssueDate(s);
+                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      -1w
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - 1);
+                        const s = d.toISOString().slice(0, 10);
+                        setIssueDate(s);
+                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      -1m
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   value={issueDate}
-                  onChange={(e) => setIssueDate(e.target.value)}
+                  onChange={(e) => {
+                    const newIssue = e.target.value;
+                    setIssueDate(newIssue);
+                    if (newIssue) {
+                      setDueDate(new Date(new Date(newIssue).getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                    }
+                  }}
                   className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md font-mono text-slate-800 focus:outline-none focus:border-slate-500"
                 />
               </div>

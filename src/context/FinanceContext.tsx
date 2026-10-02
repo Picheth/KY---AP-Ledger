@@ -11,7 +11,9 @@ import {
   PaymentBatch,
   PaymentMethod,
   EmailReminderTemplate,
+  StandalonePaymentRecord,
 } from '../types/finance';
+import { SEEDED_DAILY_PAYMENTS } from '../data/dailyPaymentsSeed';
 import {
   INITIAL_INVOICES,
   INITIAL_VENDORS,
@@ -37,22 +39,25 @@ interface FinanceContextType {
   setCurrentCurrency: (currency: CurrencyCode) => void;
   addInvoice: (invoiceData: Omit<Invoice, 'id' | 'auditHistory' | 'baseAmountUSD' | 'remindersSentCount'>) => Invoice;
   updateInvoice: (id: string, updates: Partial<Invoice>, auditNote?: string) => void;
+  deleteInvoice: (id: string) => boolean;
   approveInvoice: (id: string, note?: string) => boolean;
   rejectInvoice: (id: string, reason: string) => boolean;
-  executePayment: (invoiceId: string, method: PaymentMethod) => void;
+  executePayment: (invoiceId: string, method: PaymentMethod, paymentDate?: string) => void;
   executePartialPayment: (
     invoiceId: string,
     amount: number,
     method: PaymentMethod,
     reference?: string,
-    notes?: string
+    notes?: string,
+    paymentDate?: string
   ) => boolean;
   executeBulkPayment: (invoiceIds: string[], method: PaymentMethod) => PaymentBatch;
   executeMultiInvoiceSettlement: (
     allocations: { invoiceId: string; amount: number }[],
     method: PaymentMethod,
     totalBudget?: number,
-    notes?: string
+    notes?: string,
+    paymentDate?: string
   ) => PaymentBatch;
   sendEmailReminder: (invoiceId: string, templateId: string, customSubject?: string, customBody?: string) => void;
   addVendor: (vendorData: Omit<Vendor, 'id' | 'totalSpendUSD' | 'openInvoicesCount'>) => Vendor;
@@ -60,6 +65,22 @@ interface FinanceContextType {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   resetToSampleData: () => void;
+  dailyPayments: StandalonePaymentRecord[];
+  addDailyPayment: (payment: Omit<StandalonePaymentRecord, 'id'>) => void;
+  updateDailyPayment: (id: string, updates: Partial<StandalonePaymentRecord>) => void;
+  deleteDailyPayment: (id: string) => void;
+  updatePaymentRecord: (
+    invoiceId: string,
+    paymentId: string,
+    updates: {
+      amount?: number;
+      paymentDate?: string;
+      paymentMethod?: PaymentMethod | string;
+      reference?: string;
+      notes?: string;
+    }
+  ) => boolean;
+  deletePaymentRecord: (invoiceId: string, paymentId: string) => boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -70,12 +91,19 @@ const STORAGE_KEY_NOTIFS = 'ledgerflow_real_ledger_v8_notif';
 const STORAGE_KEY_ROLE = 'ledgerflow_real_ledger_v8_role';
 const STORAGE_KEY_CURR = 'ledgerflow_real_ledger_v8_curr';
 const STORAGE_KEY_BATCHES = 'ledgerflow_real_ledger_v8_batch';
+const STORAGE_KEY_DAILY_PAYMENTS = 'ledgerflow_daily_payments_v2';
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_INVOICES);
-      return saved ? JSON.parse(saved) : INITIAL_INVOICES;
+      const parsed: Invoice[] = saved ? JSON.parse(saved) : INITIAL_INVOICES;
+      return parsed.map((inv) => {
+        if (inv.vendorName === 'S3 PLN') {
+          return { ...inv, vendorName: 'S3 PLP-NEW', vendorId: 'vnd_s3_plp_new' };
+        }
+        return inv;
+      });
     } catch {
       return INITIAL_INVOICES;
     }
@@ -84,7 +112,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [vendors, setVendors] = useState<Vendor[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_VENDORS);
-      return saved ? JSON.parse(saved) : INITIAL_VENDORS;
+      const parsed: Vendor[] = saved ? JSON.parse(saved) : INITIAL_VENDORS;
+      return parsed.map((v) => {
+        if (v.name === 'S3 PLN') {
+          return { ...v, name: 'S3 PLP-NEW', id: 'vnd_s3_plp_new' };
+        }
+        return v;
+      });
     } catch {
       return INITIAL_VENDORS;
     }
@@ -127,9 +161,61 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
+  const [dailyPayments, setDailyPayments] = useState<StandalonePaymentRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DAILY_PAYMENTS);
+      const parsed: StandalonePaymentRecord[] = saved ? JSON.parse(saved) : SEEDED_DAILY_PAYMENTS;
+      return parsed.map((p) => {
+        if (p.supplier === 'S3 PLN') {
+          return { ...p, supplier: 'S3 PLP-NEW' };
+        }
+        return p;
+      });
+    } catch {
+      return SEEDED_DAILY_PAYMENTS;
+    }
+  });
+
+  // Persist state changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_DAILY_PAYMENTS, JSON.stringify(dailyPayments));
+  }, [dailyPayments]);
+
+  const addDailyPayment = (paymentData: Omit<StandalonePaymentRecord, 'id'>) => {
+    const newRecord: StandalonePaymentRecord = {
+      ...paymentData,
+      id: `dpay_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    };
+    setDailyPayments((prev) => [newRecord, ...prev]);
+  };
+
+  const updateDailyPayment = (id: string, updates: Partial<StandalonePaymentRecord>) => {
+    setDailyPayments((prev) =>
+      prev.map((dp) => (dp.id === id ? { ...dp, ...updates } : dp))
+    );
+  };
+
+  const deleteDailyPayment = (id: string) => {
+    setDailyPayments((prev) => prev.filter((dp) => dp.id !== id));
+  };
+
   // Persist state changes
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_INVOICES, JSON.stringify(invoices));
+  }, [invoices]);
+
+  // Self-heal and migrate any lingering 'S3 PLN' records in state
+  useEffect(() => {
+    const hasLingeringPln = invoices.some((i) => i.vendorName === 'S3 PLN');
+    if (hasLingeringPln) {
+      setInvoices((prev) =>
+        prev.map((i) =>
+          i.vendorName === 'S3 PLN'
+            ? { ...i, vendorName: 'S3 PLP-NEW', vendorId: 'vnd_s3_plp_new' }
+            : i
+        )
+      );
+    }
   }, [invoices]);
 
   useEffect(() => {
@@ -226,9 +312,46 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             action: auditNote,
           });
         }
-        return { ...inv, ...updates, auditHistory: newHistory };
+        const updatedTotal = updates.totalAmount !== undefined ? updates.totalAmount : inv.totalAmount;
+        const updatedCurrency = updates.currency !== undefined ? updates.currency : inv.currency;
+        const baseUSD = convertToUSD(updatedTotal, updatedCurrency);
+        const amountPaid = updates.amountPaid !== undefined ? updates.amountPaid : (inv.amountPaid || 0);
+        const remaining = updates.remainingBalance !== undefined ? updates.remainingBalance : Math.max(0, updatedTotal - amountPaid);
+        const status = updates.status !== undefined ? updates.status : (remaining === 0 ? 'paid' : inv.status);
+
+        return {
+          ...inv,
+          ...updates,
+          baseAmountUSD: baseUSD,
+          remainingBalance: remaining,
+          status,
+          auditHistory: newHistory,
+        };
       })
     );
+  };
+
+  const deleteInvoice = (id: string): boolean => {
+    const target = invoices.find((i) => i.id === id);
+    if (!target) return false;
+
+    setInvoices((prev) => prev.filter((i) => i.id !== id));
+
+    setVendors((prev) =>
+      prev.map((v) => {
+        if (v.id === target.vendorId) {
+          return {
+            ...v,
+            openInvoicesCount: Math.max(0, v.openInvoicesCount - (target.status !== 'paid' ? 1 : 0)),
+          };
+        }
+        return v;
+      })
+    );
+
+    setNotifications((prev) => prev.filter((n) => n.invoiceId !== id));
+
+    return true;
   };
 
   const approveInvoice = (id: string, note?: string): boolean => {
@@ -319,12 +442,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return true;
   };
 
-  const executePayment = (invoiceId: string, method: PaymentMethod) => {
+  const executePayment = (invoiceId: string, method: PaymentMethod, paymentDate?: string) => {
     const target = invoices.find((i) => i.id === invoiceId);
     if (!target) return;
 
     const remainingToPay = target.remainingBalance !== undefined ? target.remainingBalance : target.totalAmount - (target.amountPaid || 0);
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const ref = `${method.toUpperCase()}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const settleUSD = convertToUSD(remainingToPay, target.currency);
 
@@ -332,10 +456,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       amount: remainingToPay,
       amountUSD: settleUSD,
-      paymentDate: nowStr,
+      paymentDate: effectiveDate,
       paymentMethod: method,
       reference: ref,
-      notes: 'Full balance settlement',
+      notes: paymentDate ? `Backdated payment applied (${paymentDate})` : 'Full balance settlement',
       recordedBy: `${currentUser.name} (${currentUser.title})`,
       remainingBalanceAfter: 0,
     };
@@ -348,7 +472,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           status: 'paid',
           amountPaid: inv.totalAmount,
           remainingBalance: 0,
-          paidAt: nowStr,
+          paidAt: effectiveDate,
           paymentMethod: method,
           paymentReference: ref,
           partialPayments: [...(inv.partialPayments || []), partialRecord],
@@ -359,7 +483,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
               timestamp: nowStr,
               userName: currentUser.name,
               role: currentUser.role,
-              action: `Disbursed full payment of ${formatCurrency(remainingToPay, target.currency)} via ${method.toUpperCase()} (Ref: ${ref})`,
+              action: `Disbursed full payment of ${formatCurrency(remainingToPay, target.currency)} via ${method.toUpperCase()} (Ref: ${ref}, Value Date: ${effectiveDate.slice(0, 10)})`,
             },
           ],
         };
@@ -399,7 +523,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     amount: number,
     method: PaymentMethod,
     reference?: string,
-    notes?: string
+    notes?: string,
+    paymentDate?: string
   ): boolean => {
     const target = invoices.find((i) => i.id === invoiceId);
     if (!target || amount <= 0) return false;
@@ -412,6 +537,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newStatus: InvoiceStatus = newRemaining === 0 ? 'paid' : 'partially_paid';
 
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const ref = reference || `${method.toUpperCase()}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const settleAmountUSD = convertToUSD(settleAmount, target.currency);
 
@@ -419,10 +545,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       amount: settleAmount,
       amountUSD: settleAmountUSD,
-      paymentDate: nowStr,
+      paymentDate: effectiveDate,
       paymentMethod: method,
       reference: ref,
-      notes: notes || undefined,
+      notes: notes || (paymentDate ? `Backdated installment (${paymentDate})` : undefined),
       recordedBy: `${currentUser.name} (${currentUser.title})`,
       remainingBalanceAfter: newRemaining,
     };
@@ -435,7 +561,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           amountPaid: newAmountPaid,
           remainingBalance: newRemaining,
           status: newStatus,
-          paidAt: newRemaining === 0 ? nowStr : inv.paidAt,
+          paidAt: newRemaining === 0 ? effectiveDate : inv.paidAt,
           paymentMethod: method,
           paymentReference: ref,
           partialPayments: [...(inv.partialPayments || []), partialRecord],
@@ -447,8 +573,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
               userName: currentUser.name,
               role: currentUser.role,
               action: newRemaining === 0
-                ? `Fully settled final tranche: ${formatCurrency(settleAmount, target.currency)} via ${method.toUpperCase()} (Ref: ${ref})`
-                : `Partial payment disbursed: ${formatCurrency(settleAmount, target.currency)} via ${method.toUpperCase()} (Ref: ${ref}). Remaining open balance: ${formatCurrency(newRemaining, target.currency)}`,
+                ? `Fully settled final tranche: ${formatCurrency(settleAmount, target.currency)} via ${method.toUpperCase()} (Ref: ${ref}, Value Date: ${effectiveDate.slice(0, 10)})`
+                : `Partial payment disbursed: ${formatCurrency(settleAmount, target.currency)} via ${method.toUpperCase()} (Ref: ${ref}, Value Date: ${effectiveDate.slice(0, 10)}). Remaining open balance: ${formatCurrency(newRemaining, target.currency)}`,
               note: notes,
             },
           ],
@@ -482,6 +608,177 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       ...prev,
     ]);
+
+    return true;
+  };
+
+  const updatePaymentRecord = (
+    invoiceId: string,
+    paymentId: string,
+    updates: {
+      amount?: number;
+      paymentDate?: string;
+      paymentMethod?: PaymentMethod | string;
+      reference?: string;
+      notes?: string;
+    }
+  ): boolean => {
+    const target = invoices.find((i) => i.id === invoiceId);
+    if (!target) return false;
+
+    let existingPayments = target.partialPayments || [];
+    
+    // If invoice was marked paid without an explicit partial record, create a synthetic one
+    if (existingPayments.length === 0 && target.amountPaid && target.amountPaid > 0) {
+      existingPayments = [
+        {
+          id: `pay_synth_${target.id}`,
+          amount: target.amountPaid,
+          amountUSD: convertToUSD(target.amountPaid, target.currency),
+          paymentDate: target.paidAt || new Date().toISOString().slice(0, 10),
+          paymentMethod: (target.paymentMethod as PaymentMethod) || 'bank_transfer',
+          reference: target.paymentReference || `PAY-${target.invoiceNumber}`,
+          recordedBy: `${currentUser.name} (${currentUser.title})`,
+          remainingBalanceAfter: target.remainingBalance || 0,
+        },
+      ];
+    }
+
+    const paymentIdx = existingPayments.findIndex((p) => p.id === paymentId || existingPayments.length === 1);
+    if (paymentIdx === -1) return false;
+
+    const oldPayment = existingPayments[paymentIdx];
+    const newAmount = updates.amount !== undefined ? updates.amount : oldPayment.amount;
+    const newDate = updates.paymentDate !== undefined ? updates.paymentDate : oldPayment.paymentDate;
+    const newMethod = (updates.paymentMethod as PaymentMethod) !== undefined ? (updates.paymentMethod as PaymentMethod) : oldPayment.paymentMethod;
+    const newRef = updates.reference !== undefined ? updates.reference : oldPayment.reference;
+    const newNotes = updates.notes !== undefined ? updates.notes : oldPayment.notes;
+
+    const updatedPayment: PartialPaymentRecord = {
+      ...oldPayment,
+      amount: newAmount,
+      amountUSD: convertToUSD(newAmount, target.currency),
+      paymentDate: newDate,
+      paymentMethod: newMethod,
+      reference: newRef,
+      notes: newNotes,
+    };
+
+    const newPartialPayments = [...existingPayments];
+    newPartialPayments[paymentIdx] = updatedPayment;
+
+    // Recalculate total amount paid and remaining balance
+    const totalAmountPaid = newPartialPayments.reduce((sum, p) => sum + p.amount, 0);
+    const newRemainingBalance = Math.max(0, target.totalAmount - totalAmountPaid);
+    const newStatus: InvoiceStatus =
+      newRemainingBalance === 0
+        ? 'paid'
+        : totalAmountPaid > 0
+        ? 'partially_paid'
+        : 'approved';
+
+    const latestPayDate = newPartialPayments.length > 0
+      ? newPartialPayments.reduce((latest, p) => p.paymentDate > latest ? p.paymentDate : latest, newPartialPayments[0].paymentDate)
+      : undefined;
+
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+        return {
+          ...inv,
+          partialPayments: newPartialPayments,
+          amountPaid: totalAmountPaid,
+          remainingBalance: newRemainingBalance,
+          status: newStatus,
+          paidAt: newRemainingBalance === 0 ? latestPayDate : undefined,
+          paymentMethod: newMethod,
+          paymentReference: newRef,
+          auditHistory: [
+            ...inv.auditHistory,
+            {
+              id: `ah_${Date.now()}`,
+              timestamp: nowStr,
+              userName: currentUser.name,
+              role: currentUser.role,
+              action: `Updated payment details: ${formatCurrency(newAmount, target.currency)} on ${newDate.slice(0, 10)}${newRef ? ` (Ref: ${newRef})` : ''}`,
+            },
+          ],
+        };
+      })
+    );
+
+    return true;
+  };
+
+  const deletePaymentRecord = (
+    invoiceId: string,
+    paymentId: string
+  ): boolean => {
+    const target = invoices.find((i) => i.id === invoiceId);
+    if (!target) return false;
+
+    let existingPayments = target.partialPayments || [];
+    
+    // If invoice was marked paid without an explicit partial record
+    if (existingPayments.length === 0 && target.amountPaid && target.amountPaid > 0) {
+      existingPayments = [
+        {
+          id: paymentId,
+          amount: target.amountPaid,
+          amountUSD: convertToUSD(target.amountPaid, target.currency),
+          paymentDate: target.paidAt || new Date().toISOString().slice(0, 10),
+          paymentMethod: (target.paymentMethod as PaymentMethod) || 'bank_transfer',
+          reference: target.paymentReference || `PAY-${target.invoiceNumber}`,
+          recordedBy: `${currentUser.name} (${currentUser.title})`,
+          remainingBalanceAfter: 0,
+        },
+      ];
+    }
+
+    const paymentToDelete = existingPayments.find((p) => p.id === paymentId) || existingPayments[0];
+    const newPartialPayments = existingPayments.filter((p) => p.id !== paymentId && p !== paymentToDelete);
+
+    // Recalculate total amount paid and remaining balance
+    const totalAmountPaid = newPartialPayments.reduce((sum, p) => sum + p.amount, 0);
+    const newRemainingBalance = Math.max(0, target.totalAmount - totalAmountPaid);
+    const newStatus: InvoiceStatus =
+      newRemainingBalance === 0
+        ? 'paid'
+        : totalAmountPaid > 0
+        ? 'partially_paid'
+        : 'approved';
+
+    const latestPayDate = newPartialPayments.length > 0
+      ? newPartialPayments.reduce((latest, p) => p.paymentDate > latest ? p.paymentDate : latest, newPartialPayments[0].paymentDate)
+      : undefined;
+
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+        return {
+          ...inv,
+          partialPayments: newPartialPayments,
+          amountPaid: totalAmountPaid,
+          remainingBalance: newRemainingBalance,
+          status: newStatus,
+          paidAt: newRemainingBalance === 0 ? latestPayDate : undefined,
+          auditHistory: [
+            ...inv.auditHistory,
+            {
+              id: `ah_${Date.now()}`,
+              timestamp: nowStr,
+              userName: currentUser.name,
+              role: currentUser.role,
+              action: `Voided payment of ${formatCurrency(paymentToDelete ? paymentToDelete.amount : 0, target.currency)}. Open balance restored to ${formatCurrency(newRemainingBalance, target.currency)}.`,
+            },
+          ],
+        };
+      })
+    );
 
     return true;
   };
@@ -592,9 +889,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     allocations: { invoiceId: string; amount: number }[],
     method: PaymentMethod,
     totalBudget?: number,
-    notes?: string
+    notes?: string,
+    paymentDate?: string
   ): PaymentBatch => {
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const batchNum = `SPLIT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     let totalAllocatedUSD = 0;
@@ -615,7 +914,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newBatch: PaymentBatch = {
       id: `batch_${Date.now()}`,
       batchNumber: batchNum,
-      createdAt: nowStr,
+      createdAt: effectiveDate,
       totalAmountUSD: totalAllocatedUSD,
       invoiceCount: settledInvoices.length,
       paymentMethod: method,
@@ -642,10 +941,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: `pay_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
           amount: settleAmount,
           amountUSD: settleUSD,
-          paymentDate: nowStr,
+          paymentDate: effectiveDate,
           paymentMethod: method,
           reference: ref,
-          notes: notes || `Multi-invoice settlement allocation batch ${batchNum}`,
+          notes: notes || `Multi-invoice settlement allocation batch ${batchNum}${paymentDate ? ` (${paymentDate})` : ''}`,
           recordedBy: `${currentUser.name} (${currentUser.title})`,
           remainingBalanceAfter: newRemaining,
         };
@@ -655,7 +954,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           amountPaid: newAmountPaid,
           remainingBalance: newRemaining,
           status: newStatus,
-          paidAt: newRemaining === 0 ? nowStr : inv.paidAt,
+          paidAt: newRemaining === 0 ? effectiveDate : inv.paidAt,
           paymentMethod: method,
           paymentReference: ref,
           partialPayments: [...(inv.partialPayments || []), partialRecord],
@@ -667,8 +966,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
               userName: currentUser.name,
               role: currentUser.role,
               action: newRemaining === 0
-                ? `Fully settled via Allocation Batch ${batchNum} (${method.toUpperCase()})`
-                : `Partial payment of ${formatCurrency(settleAmount, inv.currency)} via Allocation Batch ${batchNum} (${method.toUpperCase()}). Remaining balance: ${formatCurrency(newRemaining, inv.currency)}`,
+                ? `Fully settled via Allocation Batch ${batchNum} (${method.toUpperCase()}, Value Date: ${effectiveDate.slice(0, 10)})`
+                : `Partial payment of ${formatCurrency(settleAmount, inv.currency)} via Allocation Batch ${batchNum} (${method.toUpperCase()}, Value Date: ${effectiveDate.slice(0, 10)}). Remaining balance: ${formatCurrency(newRemaining, inv.currency)}`,
               note: notes,
             },
           ],
@@ -822,6 +1121,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setCurrentCurrency,
         addInvoice,
         updateInvoice,
+        deleteInvoice,
         approveInvoice,
         rejectInvoice,
         executePayment,
@@ -834,6 +1134,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         markNotificationRead,
         markAllNotificationsRead,
         resetToSampleData,
+        dailyPayments,
+        addDailyPayment,
+        updateDailyPayment,
+        deleteDailyPayment,
+        updatePaymentRecord,
+        deletePaymentRecord,
       }}
     >
       {children}

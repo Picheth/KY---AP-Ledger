@@ -50,13 +50,16 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   
   // Partial payment state
   const [showPartialPay, setShowPartialPay] = useState(false);
+  const [partialPaymentDate, setPartialPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [fullPaymentDate, setFullPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [partialAmountInput, setPartialAmountInput] = useState<string>('');
   const [partialNotes, setPartialNotes] = useState('');
   const [partialRef, setPartialRef] = useState('');
 
   if (!invoice) return null;
 
-  const vendor = vendors.find((v) => v.id === invoice.vendorId);
+  const vendorName = invoice.vendorName === 'S3 PLN' ? 'S3 PLP-NEW' : invoice.vendorName;
+  const vendor = vendors.find((v) => v.id === invoice.vendorId || v.name === vendorName);
   const convertedTotal = convertFromUSD(invoice.baseAmountUSD, currentCurrency);
 
   const amountPaid = invoice.amountPaid || 0;
@@ -85,7 +88,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   };
 
   const handlePayFull = () => {
-    executePayment(invoice.id, selectedPayMethod);
+    executePayment(invoice.id, selectedPayMethod, fullPaymentDate);
     setShowPayOptions(false);
     onClose();
   };
@@ -106,7 +109,8 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
       numericAmt,
       selectedPayMethod,
       partialRef.trim() || undefined,
-      partialNotes.trim() || undefined
+      partialNotes.trim() || undefined,
+      partialPaymentDate
     );
     setShowPartialPay(false);
     onClose();
@@ -178,7 +182,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
             <div>
               <div className="text-xs text-slate-400 font-medium">Beneficiary / Vendor</div>
-              <div className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.vendorName}</div>
+              <div className="text-sm font-semibold text-slate-900 mt-0.5">{vendorName}</div>
               <div className="text-xs text-slate-500 mt-1">{invoice.vendorCategory}</div>
               {vendor && (
                 <div className="text-[11px] text-slate-400 font-mono mt-1">
@@ -461,6 +465,45 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
                 {/* Treasury Rail */}
                 <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-800 block text-xs">Payment Date (Backdating allowed)</label>
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setPartialPaymentDate(new Date().toISOString().slice(0, 10))}
+                        className="px-1.5 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() - 1);
+                          setPartialPaymentDate(d.toISOString().slice(0, 10));
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                      >
+                        Yesterday
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPartialPaymentDate(invoice.issueDate)}
+                        className="px-1.5 py-0.5 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-mono"
+                        title={`Match invoice date: ${invoice.issueDate}`}
+                      >
+                        Inv Date
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    value={partialPaymentDate}
+                    onChange={(e) => setPartialPaymentDate(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-indigo-300 rounded-md font-mono bg-white text-xs mb-2"
+                  />
+
                   <label className="font-semibold text-slate-800 block mb-1">Disbursement Channel</label>
                   <select
                     value={selectedPayMethod}
@@ -527,7 +570,19 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           {/* Full Pay Options dropdown if active */}
           {showPayOptions && (
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2 text-xs">
-              <label className="font-semibold text-slate-900 block">Select Disbursement Banking Channel (Full Balance)</label>
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-900 block">Select Disbursement Banking Channel (Full Balance)</label>
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="text-slate-500 font-medium">Payment Date:</span>
+                  <input
+                    type="date"
+                    required
+                    value={fullPaymentDate}
+                    onChange={(e) => setFullPaymentDate(e.target.value)}
+                    className="px-2 py-0.5 border border-slate-300 rounded font-mono text-xs bg-white"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {[
                   { id: 'aba_pay' as PaymentMethod, label: 'ABA Bank / PAY' },

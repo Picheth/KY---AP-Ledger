@@ -361,6 +361,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => onNavigateTab('daily-report')}
+                className="px-3 py-1.5 text-xs font-semibold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition-colors flex items-center gap-1.5 shadow-2xs"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Daily Report</span>
+              </button>
+              <button
                 onClick={onOpenIntake}
                 className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
               >

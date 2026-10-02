@@ -6,6 +6,10 @@ import { InvoicesView } from './components/InvoicesView';
 import { ApprovalsView } from './components/ApprovalsView';
 import { VendorsView } from './components/VendorsView';
 import { RemindersView } from './components/RemindersView';
+import { DailyReportView } from './components/DailyReportView';
+import { PurchasesView } from './components/PurchasesView';
+import { SettlementDetailsView } from './components/SettlementDetailsView';
+import { SettlementReportModal } from './components/SettlementReportModal';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { InvoiceIntakeModal } from './components/InvoiceIntakeModal';
 import { BulkPaymentModal } from './components/BulkPaymentModal';
@@ -26,6 +30,9 @@ function MainApp() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [invoicesInitialFilter, setInvoicesInitialFilter] = useState<string>('all');
   const [reminderTargetInvoiceId, setReminderTargetInvoiceId] = useState<string | undefined>(undefined);
+  const [selectedPurchasesSupplier, setSelectedPurchasesSupplier] = useState<string>('All Suppliers');
+  const [selectedSettlementInvoiceId, setSelectedSettlementInvoiceId] = useState<string>('');
+  const [isSettlementReportOpen, setIsSettlementReportOpen] = useState<boolean>(false);
 
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null;
 
@@ -74,6 +81,28 @@ function MainApp() {
             onOpenIntake={() => setIsIntakeOpen(true)}
             onSelectInvoice={(id) => setSelectedInvoiceId(id)}
           />
+        )}
+
+        {activeTab === 'purchases' && (
+          <PurchasesView
+            initialSupplier={selectedPurchasesSupplier}
+            onOpenSettlementDetails={(invId) => {
+              const found = invoices.find((i) => i.id === invId);
+              setSelectedSettlementInvoiceId(found ? found.id : invId);
+              setActiveTab('settlement');
+            }}
+          />
+        )}
+
+        {activeTab === 'settlement' && (
+          <SettlementDetailsView
+            invoiceId={selectedSettlementInvoiceId}
+            onBack={() => setActiveTab('purchases')}
+          />
+        )}
+
+        {activeTab === 'daily-report' && (
+          <DailyReportView />
         )}
 
         {activeTab === 'invoices' && (
@@ -160,6 +189,16 @@ function MainApp() {
       <AuditReportsModal
         isOpen={isAuditReportsOpen}
         onClose={() => setIsAuditReportsOpen(false)}
+      />
+
+      <SettlementReportModal
+        isOpen={isSettlementReportOpen || activeTab === 'settlement-report'}
+        onClose={() => {
+          setIsSettlementReportOpen(false);
+          if (activeTab === 'settlement-report') {
+            setActiveTab('dashboard');
+          }
+        }}
       />
 
       <NotificationsDrawer

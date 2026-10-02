@@ -3,6 +3,7 @@ import { useFinance } from '../context/FinanceContext';
 import { Invoice, InvoiceStatus, PaymentMethod } from '../types/finance';
 import { formatCurrency, convertFromUSD } from '../utils/currency';
 import { exportInvoicesToCSV } from '../utils/csvExport';
+import { EditInvoiceModal } from './EditInvoiceModal';
 import {
   Search,
   Filter,
@@ -16,6 +17,8 @@ import {
   Check,
   Plus,
   Split,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 
 interface InvoicesViewProps {
@@ -39,6 +42,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     currentUser,
     approveInvoice,
     executePayment,
+    deleteInvoice,
   } = useFinance();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,6 +50,28 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [invoiceToEdit, setInvoiceToEdit] = useState<Invoice | null>(null);
+
+  const handleDeleteSingle = (e: React.MouseEvent, inv: Invoice) => {
+    e.stopPropagation();
+    const ok = window.confirm(
+      `Delete invoice ${inv.invoiceNumber} (${inv.vendorName})? This will remove it from the ledger.`
+    );
+    if (ok) {
+      deleteInvoice(inv.id);
+      setSelectedInvoiceIds((prev) => prev.filter((id) => id !== inv.id));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const ok = window.confirm(
+      `Permanently delete all ${selectedInvoiceIds.length} selected invoices from the ledger?`
+    );
+    if (ok) {
+      selectedInvoiceIds.forEach((id) => deleteInvoice(id));
+      setSelectedInvoiceIds([]);
+    }
+  };
 
   // Unique departments for dropdown
   const departments = useMemo(() => {
@@ -253,10 +279,11 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           {/* New Invoice Intake */}
           <button
             onClick={onOpenIntake}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+            title="Create / Add New Invoice"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Intake Invoice</span>
+            <span>+ Add Invoice</span>
           </button>
         </div>
 
@@ -342,6 +369,13 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             >
               <CreditCard className="w-3.5 h-3.5" />
               <span>Bulk Pay Batch</span>
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-md transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete ({selectedInvoiceIds.length})</span>
             </button>
             <button
               onClick={() => setSelectedInvoiceIds([])}
@@ -577,10 +611,31 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                             </button>
                           )}
 
+                          {/* Edit details */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInvoiceToEdit(inv);
+                            }}
+                            className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            title="Edit invoice details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Delete invoice */}
+                          <button
+                            onClick={(e) => handleDeleteSingle(e, inv)}
+                            className="p-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            title="Delete invoice"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* View details */}
                           <button
                             onClick={() => onSelectInvoice(inv.id)}
-                            className="p-1 text-slate-500 hover:text-slate-900 rounded-md transition-colors"
+                            className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors"
                             title="Inspect 3-way match & line items"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -617,6 +672,13 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         </div>
 
       </div>
+
+      {/* Edit Invoice Modal */}
+      <EditInvoiceModal
+        isOpen={invoiceToEdit !== null}
+        onClose={() => setInvoiceToEdit(null)}
+        invoice={invoiceToEdit}
+      />
 
     </div>
   );
