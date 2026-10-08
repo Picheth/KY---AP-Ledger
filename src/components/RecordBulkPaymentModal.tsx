@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { PaymentMethod } from '../types/finance';
 import { formatCurrency } from '../utils/currency';
@@ -17,7 +18,7 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
 }) => {
   const { invoices, currentCurrency, executePartialPayment, addDailyPayment } = useFinance();
 
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState<string>(todayPhnomPenh());
   const [totalPaymentAmount, setTotalPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
   const [reference, setReference] = useState<string>('');
@@ -38,6 +39,9 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
 
   const parsedTotal = parseFloat(totalPaymentAmount) || 0;
 
+  // Manual per-invoice overrides. null = pure Auto Allocation (A → Z).
+  const [customAlloc, setCustomAlloc] = useState<Record<string, number> | null>(null);
+
   // Compute auto-allocation across open invoices
   const allocation = useMemo(() => {
     let pool = parsedTotal;
@@ -55,8 +59,13 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
       const balance = inv.remainingBalance !== undefined ? inv.remainingBalance : (inv.totalAmount - (inv.amountPaid || 0));
       if (balance <= 0) continue;
 
-      const alloc = Math.min(pool, balance);
-      pool -= alloc;
+      const autoAlloc = Math.min(pool, balance);
+      pool -= autoAlloc;
+
+      const alloc =
+        customAlloc !== null
+          ? Math.max(0, Math.min(customAlloc[inv.id] ?? 0, balance))
+          : autoAlloc;
 
       items.push({
         invoiceId: inv.id,
@@ -69,15 +78,41 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
       });
     }
 
-    const totalAllocated = parsedTotal - pool;
-    const unallocatedRemaining = pool;
+    const totalAllocated = items.reduce((s, it) => s + it.allocatedAmount, 0);
+    const unallocatedRemaining = Math.max(0, parsedTotal - totalAllocated);
 
     return {
       items,
       totalAllocated,
       unallocatedRemaining,
     };
-  }, [openInvoices, parsedTotal]);
+  }, [openInvoices, parsedTotal, customAlloc]);
+
+  // Switch from auto to manual on first edit
+  const handleEditAllocation = (invoiceId: string, valueStr: string) => {
+    const parsed = parseFloat(valueStr);
+    setCustomAlloc((prev) => {
+      const base: Record<string, number> = prev ?? {};
+      if (prev === null) {
+        // seed from current auto preview
+        for (const it of allocation.items) {
+          base[it.invoiceId] = it.allocatedAmount;
+        }
+      }
+      const inv = openInvoices.find((i) => i.id === invoiceId);
+      const balance = inv
+        ? inv.remainingBalance !== undefined
+          ? inv.remainingBalance
+          : inv.totalAmount - (inv.amountPaid || 0)
+        : 0;
+      base[invoiceId] = isNaN(parsed) || parsed <= 0 ? 0 : Math.min(parsed, balance);
+      return { ...base };
+    });
+  };
+
+  const handleResetAutoAllocation = () => {
+    setCustomAlloc(null);
+  };
 
   const handleSavePayment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +194,7 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
                   <div className="flex items-center gap-1 text-[10px]">
                     <button
                       type="button"
-                      onClick={() => setPaymentDate(new Date().toISOString().slice(0, 10))}
+                      onClick={() => setPaymentDate(todayPhnomPenh())}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
                       Today
@@ -169,7 +204,7 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 1);
-                        setPaymentDate(d.toISOString().slice(0, 10));
+                        setPaymentDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -180,7 +215,7 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 3);
-                        setPaymentDate(d.toISOString().slice(0, 10));
+                        setPaymentDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -191,7 +226,7 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 7);
-                        setPaymentDate(d.toISOString().slice(0, 10));
+                        setPaymentDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -279,9 +314,18 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {parsedTotal > 0
-                  ? `Allocating sequentially across ${allocation.items.length} open invoices`
+                  ? `${customAlloc === null ? 'Auto-allocating sequentially' : 'Manually adjusted allocation'} across ${allocation.items.length} open invoices`
                   : 'Enter payment amount to preview allocation'}
               </p>
+              {customAlloc !== null && (
+                <button
+                  type="button"
+                  onClick={handleResetAutoAllocation}
+                  className="mt-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  Reset to Auto (A → Z)
+                </button>
+              )}
 
               {parsedTotal > 0 && (
                 <div className="mt-3 max-h-48 overflow-y-auto space-y-2 pr-1">
@@ -303,10 +347,16 @@ export const RecordBulkPaymentModal: React.FC<RecordBulkPaymentModalProps> = ({
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-mono font-bold text-emerald-700">
-                          +{formatCurrency(item.allocatedAmount, currentCurrency)}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          max={item.currentBalance}
+                          value={item.allocatedAmount}
+                          onChange={(e) => handleEditAllocation(item.invoiceId, e.target.value)}
+                          className="w-28 px-2 py-1 text-right text-xs font-mono font-bold text-emerald-700 bg-white border border-emerald-200 rounded-md focus:outline-none focus:border-indigo-500"
+                        />
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                           Remaining: {formatCurrency(item.remainingBalanceAfter, currentCurrency)}
                         </div>
                       </div>

@@ -1,4 +1,6 @@
 export type CurrencyCode = 'USD' | 'KHR';
+export type PaymentTerms = 'Net 15' | 'Net 30' | 'Net 60' | 'Due on receipt' | string;
+export type AppMode = 'simple' | 'advanced';
 
 export interface ExchangeRate {
   code: CurrencyCode;

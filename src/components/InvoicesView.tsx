@@ -43,7 +43,10 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     approveInvoice,
     executePayment,
     deleteInvoice,
+    appMode,
   } = useFinance();
+
+  const isSimple = appMode === 'simple';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter);
@@ -55,7 +58,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const handleDeleteSingle = (e: React.MouseEvent, inv: Invoice) => {
     e.stopPropagation();
     const ok = window.confirm(
-      `Delete invoice ${inv.invoiceNumber} (${inv.vendorName})? This will remove it from the ledger.`
+      `Delete ${isSimple ? 'bill' : 'invoice'} ${inv.invoiceNumber} (${inv.vendorName})? This will remove it from the ledger.`
     );
     if (ok) {
       deleteInvoice(inv.id);
@@ -102,7 +105,15 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
 
       // Status
       if (statusFilter !== 'all') {
-        if (statusFilter === 'receivable') {
+        if (statusFilter === 'unpaid') {
+          if (inv.status === 'paid' || inv.status === 'rejected') return false;
+        } else if (statusFilter === 'due_soon') {
+          if (inv.status === 'paid' || inv.status === 'rejected') return false;
+          const today = new Date('2026-09-25');
+          const sevenDaysLater = new Date('2026-10-02');
+          const due = new Date(inv.dueDate);
+          if (due < today || due > sevenDaysLater) return false;
+        } else if (statusFilter === 'receivable') {
           if (inv.type !== 'receivable') return false;
         } else if (statusFilter === 'overdue') {
           if (inv.status !== 'overdue') return false;
@@ -150,7 +161,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   const selectedInvoices = invoices.filter((i) => selectedInvoiceIds.includes(i.id));
   const selectedTotalUSD = selectedInvoices.reduce((s, i) => s + i.baseAmountUSD, 0);
 
-  // Status text & style helper - strict zero-pill discipline (unboxed text with typographic separator)
+  // Status text & style helper
   const renderStatus = (status: InvoiceStatus, type: string) => {
     if (status === 'overdue') {
       return (
@@ -180,7 +191,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       return (
         <span className="inline-flex items-center gap-1.5 font-medium text-blue-700 text-xs">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-          <span>Approved</span>
+          <span>{isSimple ? 'Ready to Pay' : 'Approved'}</span>
         </span>
       );
     }
@@ -188,7 +199,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       return (
         <span className="inline-flex items-center gap-1.5 font-medium text-amber-700 text-xs">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-          <span>In Review</span>
+          <span>{isSimple ? 'Unpaid' : 'In Review'}</span>
         </span>
       );
     }
@@ -208,6 +219,64 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     );
   };
 
+  const simpleTabs = [
+    { id: 'all', label: 'All Bills', count: invoices.length },
+    {
+      id: 'unpaid',
+      label: 'Unpaid',
+      count: invoices.filter((i) => i.status !== 'paid' && i.status !== 'rejected').length,
+    },
+    {
+      id: 'partially_paid',
+      label: 'Partially Paid',
+      count: invoices.filter((i) => i.status === 'partially_paid').length,
+    },
+    {
+      id: 'overdue',
+      label: 'Overdue',
+      count: invoices.filter((i) => i.status === 'overdue').length,
+    },
+    {
+      id: 'paid',
+      label: 'Paid / Settled',
+      count: invoices.filter((i) => i.status === 'paid').length,
+    },
+  ];
+
+  const advancedTabs = [
+    { id: 'all', label: 'All Invoices', count: invoices.length },
+    {
+      id: 'overdue',
+      label: 'Overdue',
+      count: invoices.filter((i) => i.status === 'overdue').length,
+    },
+    {
+      id: 'partially_paid',
+      label: 'Partially Paid',
+      count: invoices.filter((i) => i.status === 'partially_paid').length,
+    },
+    {
+      id: 'pending_approval',
+      label: 'Pending Approval',
+      count: invoices.filter((i) => i.status === 'pending_approval' || i.status === 'in_review').length,
+    },
+    {
+      id: 'approved',
+      label: 'Approved (Ready to Pay)',
+      count: invoices.filter((i) => i.status === 'approved').length,
+    },
+    {
+      id: 'paid',
+      label: 'Settled / Paid',
+      count: invoices.filter((i) => i.status === 'paid').length,
+    },
+    {
+      id: 'receivable',
+      label: 'Receivables (AR)',
+      count: invoices.filter((i) => i.type === 'receivable').length,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       
@@ -221,7 +290,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search vendor, invoice #, PO reference..."
+            placeholder={isSimple ? 'Search supplier, bill #, category...' : 'Search vendor, invoice #, PO reference...'}
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-slate-500 focus:bg-white transition-colors"
           />
         </div>
@@ -242,25 +311,27 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             <option value="Logistics & Freight">✈️ Logistics & Freight</option>
           </select>
 
-          {/* Department Select */}
-          <select
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-none focus:border-slate-500"
-          >
-            <option value="all">All Departments</option>
-            {departments.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+          {/* Department Select (Advanced Mode) */}
+          {!isSimple && (
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-700 focus:outline-none focus:border-slate-500"
+            >
+              <option value="all">All Departments</option>
+              {departments.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Export CSV */}
           <button
             onClick={() => exportInvoicesToCSV(filteredInvoices)}
             className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap"
-            title="Export standard RFC 4180 audit CSV"
+            title="Export standard CSV"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Export CSV</span>
@@ -270,60 +341,28 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           <button
             onClick={() => onOpenBulkPayWithSelected ? onOpenBulkPayWithSelected([]) : null}
             className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs"
-            title="Split settlement and allocate remaining balance across supplier invoices"
+            title="Settle multiple bills"
           >
             <Split className="w-3.5 h-3.5" />
-            <span>Split Allocator</span>
+            <span>{isSimple ? 'Settle Bills' : 'Split Allocator'}</span>
           </button>
 
           {/* New Invoice Intake */}
           <button
             onClick={onOpenIntake}
             className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs"
-            title="Create / Add New Invoice"
+            title="Create / Add New Bill"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Add Invoice</span>
+            <span>{isSimple ? '+ Add Bill' : '+ Add Invoice'}</span>
           </button>
         </div>
 
       </div>
 
-      {/* Segmented Filter Bar (Button controls per constitution) */}
+      {/* Segmented Filter Bar */}
       <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto scrollbar-none text-xs">
-        {[
-          { id: 'all', label: 'All Invoices', count: invoices.length },
-          {
-            id: 'overdue',
-            label: 'Overdue',
-            count: invoices.filter((i) => i.status === 'overdue').length,
-          },
-          {
-            id: 'partially_paid',
-            label: 'Partially Paid',
-            count: invoices.filter((i) => i.status === 'partially_paid').length,
-          },
-          {
-            id: 'pending_approval',
-            label: 'Pending Approval',
-            count: invoices.filter((i) => i.status === 'pending_approval' || i.status === 'in_review').length,
-          },
-          {
-            id: 'approved',
-            label: 'Approved (Ready to Pay)',
-            count: invoices.filter((i) => i.status === 'approved').length,
-          },
-          {
-            id: 'paid',
-            label: 'Settled / Paid',
-            count: invoices.filter((i) => i.status === 'paid').length,
-          },
-          {
-            id: 'receivable',
-            label: 'Receivables (AR)',
-            count: invoices.filter((i) => i.type === 'receivable').length,
-          },
-        ].map((tab) => {
+        {(isSimple ? simpleTabs : advancedTabs).map((tab) => {
           const isActive = statusFilter === tab.id;
           return (
             <button
@@ -405,13 +444,17 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                     className="rounded border-slate-300 text-slate-900 focus:ring-0 cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-3">Invoice & PO</th>
-                <th className="py-3 px-3">Vendor / Beneficiary</th>
+                <th className="py-3 px-3">{isSimple ? 'Bill #' : 'Invoice & PO'}</th>
+                <th className="py-3 px-3">{isSimple ? 'Supplier' : 'Vendor / Beneficiary'}</th>
                 <th className="py-3 px-3">Dates</th>
-                <th className="py-3 px-3 text-right">Amount (Original)</th>
-                <th className="py-3 px-3 text-right">Remaining Open</th>
-                <th className="py-3 px-3 text-right">Amount ({currentCurrency})</th>
-                <th className="py-3 px-3">Compliance</th>
+                <th className="py-3 px-3 text-right">Total Amount</th>
+                <th className="py-3 px-3 text-right">Balance Owed</th>
+                {!isSimple && (
+                  <th className="py-3 px-3 text-right">Amount ({currentCurrency})</th>
+                )}
+                {!isSimple && (
+                  <th className="py-3 px-3">Compliance</th>
+                )}
                 <th className="py-3 px-3">Status</th>
                 <th className="py-3 px-3 text-right">Actions</th>
               </tr>
@@ -420,16 +463,16 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
-                    <p className="text-sm font-medium">No matching invoices found</p>
+                  <td colSpan={isSimple ? 8 : 10} className="py-12 text-center text-slate-500">
+                    <p className="text-sm font-medium">No matching bills found</p>
                     <p className="text-xs text-slate-400 mt-1">
                       Try adjusting your search query or status filter.
                     </p>
                     <button
                       onClick={onOpenIntake}
-                      className="mt-3 px-3 py-1.5 text-xs font-medium text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+                      className="mt-3 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors"
                     >
-                      Process First Invoice
+                      + Add New Bill
                     </button>
                   </td>
                 </tr>
@@ -438,6 +481,10 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                   const isSelected = selectedInvoiceIds.includes(inv.id);
                   const isOverdue = inv.status === 'overdue';
                   const convertedAmount = convertFromUSD(inv.baseAmountUSD, currentCurrency);
+                  const remainingVal =
+                    inv.remainingBalance !== undefined
+                      ? inv.remainingBalance
+                      : inv.totalAmount - (inv.amountPaid || 0);
 
                   return (
                     <tr
@@ -460,24 +507,28 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                       <td className="py-3 px-3">
                         <button
                           onClick={() => onSelectInvoice(inv.id)}
-                          className="font-mono font-semibold text-slate-900 hover:underline text-left block"
+                          className="font-mono font-semibold text-indigo-700 hover:underline text-left block"
                         >
                           {inv.invoiceNumber}
                         </button>
                         <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                          {inv.poNumber ? inv.poNumber : <span className="text-slate-400">Direct AP</span>}
+                          {inv.poNumber ? inv.poNumber : <span className="text-slate-400">Direct Purchase</span>}
                         </div>
                       </td>
 
                       {/* Vendor */}
                       <td className="py-3 px-3 max-w-[200px]">
-                        <div className="font-medium text-slate-900 truncate" title={inv.vendorName}>
+                        <div className="font-semibold text-slate-900 truncate" title={inv.vendorName}>
                           {inv.vendorName}
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
                           <span>{inv.vendorCategory}</span>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-slate-400">{inv.department}</span>
+                          {!isSimple && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="text-slate-400">{inv.department}</span>
+                            </>
+                          )}
                         </div>
                       </td>
 
@@ -487,7 +538,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                           Due: <span className={isOverdue ? 'font-semibold text-rose-700' : ''}>{inv.dueDate}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Issued: {inv.issueDate}
+                          Date: {inv.issueDate}
                         </div>
                       </td>
 
@@ -497,59 +548,58 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                           {formatCurrency(inv.totalAmount, inv.currency)}
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          Terms: {inv.paymentTerms}
+                          {inv.paymentTerms}
                         </div>
                       </td>
 
                       {/* Remaining Open Balance */}
                       <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                         <div
-                          className={`font-semibold ${
-                            (inv.remainingBalance !== undefined ? inv.remainingBalance : inv.totalAmount - (inv.amountPaid || 0)) > 0
+                          className={`font-bold ${
+                            remainingVal > 0
                               ? isOverdue
                                 ? 'text-rose-700'
                                 : 'text-slate-900'
                               : 'text-emerald-700'
                           }`}
                         >
-                          {formatCurrency(
-                            inv.remainingBalance !== undefined
-                              ? inv.remainingBalance
-                              : inv.totalAmount - (inv.amountPaid || 0),
-                            inv.currency
-                          )}
+                          {formatCurrency(remainingVal, inv.currency)}
                         </div>
                         {(inv.amountPaid || 0) > 0 && (
-                          <div className="text-[10px] text-indigo-700 font-medium">
+                          <div className="text-[10px] text-indigo-600 font-medium">
                             Paid: {formatCurrency(inv.amountPaid || 0, inv.currency)}
                           </div>
                         )}
                       </td>
 
                       {/* Amount Converted Base */}
-                      <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
-                        <div className="font-semibold text-slate-700">
-                          {formatCurrency(convertedAmount, currentCurrency)}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Base rate applied
-                        </div>
-                      </td>
+                      {!isSimple && (
+                        <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
+                          <div className="font-semibold text-slate-700">
+                            {formatCurrency(convertedAmount, currentCurrency)}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Base rate applied
+                          </div>
+                        </td>
+                      )}
 
                       {/* 3-Way Match Compliance */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        {inv.threeWayMatched ? (
-                          <span className="text-emerald-700 font-medium text-[11px] flex items-center gap-1">
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span>3-Way Matched</span>
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 font-medium text-[11px] flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-500" />
-                            <span>Pending PO Match</span>
-                          </span>
-                        )}
-                      </td>
+                      {!isSimple && (
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {inv.threeWayMatched ? (
+                            <span className="text-emerald-700 font-medium text-[11px] flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span>3-Way Matched</span>
+                            </span>
+                          ) : (
+                            <span className="text-amber-700 font-medium text-[11px] flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-500" />
+                              <span>Pending Match</span>
+                            </span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Status */}
                       <td className="py-3 px-3 whitespace-nowrap">

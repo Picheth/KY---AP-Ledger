@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { Invoice, PaymentMethod } from '../types/finance';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, convertToUSD, convertFromUSD } from '../utils/currency';
 import { RecordBulkPaymentModal } from './RecordBulkPaymentModal';
 import {
   Download,
@@ -70,7 +71,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
   }, [invoiceId, invoices]);
 
   // Payment form state
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState<string>(todayPhnomPenh());
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
   const [reference, setReference] = useState<string>('');
@@ -155,7 +156,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
       currentInvoice.id,
       parsedAmount,
       paymentMethod,
-      reference.trim() || `PAY-${currentInvoice.invoiceNumber}-${new Date().toISOString().slice(5, 10).replace('-', '')}`,
+      reference.trim() || `PAY-${currentInvoice.invoiceNumber}-${todayPhnomPenh().slice(5, 10).replace('-', '')}`,
       notes.trim() || `Settlement installment for ${currentInvoice.invoiceNumber}`,
       paymentDate
     );
@@ -188,7 +189,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
   const handleStartEdit = (p: any) => {
     setEditingPayment(p);
     setEditAmount(p.amount.toString());
-    setEditDate(p.paymentDate ? p.paymentDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setEditDate(p.paymentDate ? p.paymentDate.slice(0, 10) : todayPhnomPenh());
     setEditMethod((p.paymentMethod as PaymentMethod) || 'bank_transfer');
     setEditRef(p.reference || '');
     setEditNotes(p.notes || '');
@@ -254,9 +255,9 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
     let sumDue = 0;
     let sumRemaining = 0;
     filteredInvoices.forEach((i) => {
-      sumDue += i.totalAmount;
+      sumDue += convertToUSD(i.totalAmount, i.currency);
       const rem = i.remainingBalance !== undefined ? i.remainingBalance : (i.totalAmount - (i.amountPaid || 0));
-      sumRemaining += rem;
+      sumRemaining += convertToUSD(rem, i.currency);
     });
     return { sumDue, sumRemaining };
   }, [filteredInvoices]);
@@ -352,7 +353,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                 Showing <strong className="text-slate-900 font-semibold">{filteredInvoices.length}</strong> invoices
               </span>
               <span>
-                Total Due: <strong className="text-red-600 font-mono font-bold">{formatCurrency(listTotals.sumRemaining, currentCurrency)}</strong>
+                Total Due: <strong className="text-red-600 font-mono font-bold">{formatCurrency(convertFromUSD(listTotals.sumRemaining, currentCurrency), currentCurrency)}</strong>
               </span>
             </div>
 
@@ -533,7 +534,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                         <div className="flex items-center gap-1 text-[10px]">
                           <button
                             type="button"
-                            onClick={() => setPaymentDate(new Date().toISOString().slice(0, 10))}
+                            onClick={() => setPaymentDate(todayPhnomPenh())}
                             className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                           >
                             Today
@@ -543,7 +544,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                             onClick={() => {
                               const d = new Date();
                               d.setDate(d.getDate() - 1);
-                              setPaymentDate(d.toISOString().slice(0, 10));
+                              setPaymentDate(toPhnomPenhDate(d));
                             }}
                             className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                           >
@@ -554,7 +555,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                             onClick={() => {
                               const d = new Date();
                               d.setDate(d.getDate() - 3);
-                              setPaymentDate(d.toISOString().slice(0, 10));
+                              setPaymentDate(toPhnomPenhDate(d));
                             }}
                             className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                           >
@@ -737,7 +738,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                           <div className="flex items-center gap-1 text-[10px]">
                             <button
                               type="button"
-                              onClick={() => setEditDate(new Date().toISOString().slice(0, 10))}
+                              onClick={() => setEditDate(todayPhnomPenh())}
                               className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                             >
                               Today
@@ -747,7 +748,7 @@ export const SettlementDetailsView: React.FC<SettlementDetailsViewProps> = ({
                               onClick={() => {
                                 const d = new Date();
                                 d.setDate(d.getDate() - 1);
-                                setEditDate(d.toISOString().slice(0, 10));
+                                setEditDate(toPhnomPenhDate(d));
                               }}
                               className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                             >

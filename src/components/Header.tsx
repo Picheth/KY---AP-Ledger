@@ -10,22 +10,31 @@ import {
   FileSpreadsheet,
   Plus,
   RefreshCw,
+  Sparkles,
+  Layers,
+  Store,
+  Building2,
+  Database,
 } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenIntake: () => void;
+  onOpenQuickPurchase?: () => void;
   onOpenAudit: () => void;
   onOpenNotifications: () => void;
+  onOpenDatabase: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   onOpenIntake,
+  onOpenQuickPurchase,
   onOpenAudit,
   onOpenNotifications,
+  onOpenDatabase,
 }) => {
   const {
     currentRole,
@@ -35,33 +44,49 @@ export const Header: React.FC<HeaderProps> = ({
     setCurrentCurrency,
     unreadNotificationsCount,
     resetToSampleData,
+    appMode,
+    setAppMode,
   } = useFinance();
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false);
 
-  const navLinks = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'invoices', label: 'Invoices' },
-    { id: 'vendors', label: 'Suppliers' },
-    { id: 'purchases', label: 'Purchases' },
-    { id: 'settlement', label: 'Settlement' },
-    { id: 'daily-report', label: 'Daily Report' },
-    { id: 'settlement-report', label: 'Settlement Report' },
-  ];
+  const isSimple = appMode === 'simple';
+
+  // Simple mode: fewer top-level tabs — "Settlements" detail view is still
+  // reachable from any purchase row, and "Supplier Statement" stays here.
+  const navLinks = isSimple
+    ? [
+        { id: 'dashboard', label: '📊 Dashboard' },
+        { id: 'purchases', label: '📦 Purchases' },
+        { id: 'invoices', label: '🧾 Bills & Payables' },
+        { id: 'vendors', label: '🏢 Suppliers' },
+        { id: 'daily-report', label: '📖 Daily Cashbook' },
+        { id: 'settlement-report', label: '📑 Supplier Statement' },
+      ]
+    : [
+        { id: 'dashboard', label: 'Dashboard' },
+        { id: 'invoices', label: 'Invoices' },
+        { id: 'approvals', label: 'Approvals' },
+        { id: 'vendors', label: 'Suppliers' },
+        { id: 'purchases', label: 'Purchases' },
+        { id: 'settlement', label: 'Settlement' },
+        { id: 'daily-report', label: 'Daily Report' },
+        { id: 'settlement-report', label: 'Settlement Report' },
+      ];
 
   const rolesList: { role: UserRole; name: string; title: string; limit: string }[] = [
-    { role: 'cfo', name: 'Sokha Pich', title: 'Shop Owner & Managing Director', limit: '$1,000,000 / ៛4B limit' },
-    { role: 'ap_specialist', name: 'Sreymom Chan', title: 'Chief Accountant & AP Cashier', limit: '$25,000 / ៛100M limit' },
-    { role: 'dept_manager', name: 'Visal Heng', title: 'Inventory & Tech Purchasing Supervisor', limit: '$100,000 / ៛400M limit' },
-    { role: 'auditor', name: 'Rathana Ouk', title: 'Statutory Tax & Financial Auditor (GDT)', limit: 'Read-only audit' },
+    { role: 'cfo', name: 'Picheth', title: 'Shop Owner & Managing Director', limit: '$1,000,000 / ៛4B limit' },
+    { role: 'ap_specialist', name: 'Sopheak', title: 'Chief Accountant & AP Cashier', limit: '$25,000 / ៛100M limit' },
+    { role: 'dept_manager', name: 'Phanith', title: 'Inventory & Tech Purchasing Supervisor', limit: '$100,000 / ៛400M limit' },
+    { role: 'auditor', name: 'Chanthat', title: 'Statutory Tax & Financial Auditor (GDT)', limit: 'Read-only audit' },
   ];
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-slate-200">
+    <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Strict Top Bar Contract: 3 Zones */}
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-3">
           
           {/* Zone 1: Single text element wordmark */}
           <div className="flex items-center gap-3 shrink-0">
@@ -74,27 +99,27 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-base">Angkor Tech Store</span>
+                  <span className="font-bold text-slate-900 text-base">KY Store</span>
                   <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200 rounded">
                     Phnom Penh
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-slate-500 font-normal">
-                  Smartphones · Laptops · Tablets · Accessories · KHR (៛) & USD ($)
+                  Smartphones · Laptops · Accessories · KHR (៛) & USD ($)
                 </span>
               </div>
             </button>
           </div>
 
           {/* Zone 2: Clean text navigation links */}
-          <nav className="hidden md:flex items-center gap-4 lg:gap-5 text-sm font-medium text-slate-600">
+          <nav className="hidden xl:flex items-center gap-3.5 text-sm font-medium text-slate-600">
             {navLinks.map((link) => {
               const isActive = activeTab === link.id;
               return (
                 <button
                   key={link.id}
                   onClick={() => setActiveTab(link.id)}
-                  className={`py-1.5 transition-colors whitespace-nowrap ${
+                  className={`py-1.5 transition-colors whitespace-nowrap text-xs sm:text-sm ${
                     isActive
                       ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
                       : 'hover:text-slate-900'
@@ -107,8 +132,38 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Zone 3: Primary actions & Controls */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             
+            {/* Mode Switcher Toggle: Simple vs Advanced */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setAppMode('simple')}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  isSimple
+                    ? 'bg-white text-indigo-700 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Simple Accounting Format (Fast, easy bills & payments for small business)"
+              >
+                <Store className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">Simple Mode</span>
+                <span className="sm:hidden">Simple</span>
+              </button>
+              <button
+                onClick={() => setAppMode('advanced')}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  !isSimple
+                    ? 'bg-white text-slate-900 shadow-xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Advanced Mode (Multi-role limits, SOX compliance, 3-way matching)"
+              >
+                <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Advanced</span>
+                <span className="sm:hidden">Adv</span>
+              </button>
+            </div>
+
             {/* Currency Selector */}
             <div className="relative">
               <button
@@ -151,15 +206,27 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Monthly Audit Reports Button */}
+            {/* MySQL Database Status Button */}
             <button
-              onClick={onOpenAudit}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors whitespace-nowrap border border-slate-200"
-              title="Monthly Financial Auditing & Reconciliation"
+              onClick={onOpenDatabase}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors whitespace-nowrap shadow-2xs"
+              title="MySQL Workbench & Database Status (ap.db)"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600" />
-              <span>Audit Reports</span>
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">MySQL</span>
             </button>
+
+            {/* Monthly Audit Reports Button (Shown in Advanced Mode) */}
+            {!isSimple && (
+              <button
+                onClick={onOpenAudit}
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors whitespace-nowrap border border-slate-200"
+                title="Monthly Financial Auditing & Reconciliation"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600" />
+                <span>Audit Reports</span>
+              </button>
+            )}
 
             {/* Notification Bell */}
             <button
@@ -173,14 +240,27 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Quick Invoice Intake Button */}
+            {/* Short Form Quick Purchase Button */}
+            {onOpenQuickPurchase && (
+              <button
+                onClick={onOpenQuickPurchase}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition-colors shadow-2xs whitespace-nowrap"
+                title="Direct Quick Purchase Entry (Short Form)"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">+ Quick Purchase</span>
+                <span className="md:hidden">+ Quick</span>
+              </button>
+            )}
+
+            {/* Quick Bill / Invoice Intake Button */}
             <button
               onClick={onOpenIntake}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors shadow-xs whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-xs whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Process Invoice</span>
-              <span className="sm:hidden">Intake</span>
+              <span className="hidden sm:inline">{isSimple ? 'Add Bill' : 'Process Invoice'}</span>
+              <span className="sm:hidden">{isSimple ? '+ Bill' : '+ Inv'}</span>
             </button>
 
             {/* Role Profile Switcher */}
@@ -191,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setCurrencyMenuOpen(false);
                 }}
                 className="flex items-center gap-2 p-1 pl-1.5 text-xs rounded-md hover:bg-slate-100 transition-colors border border-slate-200"
-                title="Switch active finance team role"
+                title={isSimple ? 'Shop Operator Profile' : 'Switch active finance team role'}
               >
                 <img
                   src={currentUser.avatarUrl}
@@ -199,9 +279,11 @@ export const Header: React.FC<HeaderProps> = ({
                   referrerPolicy="no-referrer"
                   className="w-6 h-6 rounded-full object-cover border border-slate-300 bg-slate-200"
                 />
-                <div className="hidden sm:block text-left pr-1">
+                <div className="hidden lg:block text-left pr-1">
                   <div className="font-semibold text-slate-900 leading-tight">{currentUser.name}</div>
-                  <div className="text-[10px] text-slate-500 capitalize">{currentUser.role.replace('_', ' ')}</div>
+                  <div className="text-[10px] text-slate-500 capitalize">
+                    {isSimple ? 'Shop Owner' : currentUser.role.replace('_', ' ')}
+                  </div>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
               </button>

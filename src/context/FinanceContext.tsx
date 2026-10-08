@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { nowPhnomPenh, todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import {
   Invoice,
   InvoiceStatus,
@@ -12,6 +13,7 @@ import {
   PaymentMethod,
   EmailReminderTemplate,
   StandalonePaymentRecord,
+  AppMode,
 } from '../types/finance';
 import { SEEDED_DAILY_PAYMENTS } from '../data/dailyPaymentsSeed';
 import {
@@ -22,6 +24,17 @@ import {
   EMAIL_TEMPLATES,
 } from '../data/mockFinanceData';
 import { convertToUSD, formatCurrency } from '../utils/currency';
+import {
+  fetchInvoicesFromDB,
+  fetchVendorsFromDB,
+  fetchDailyPaymentsFromDB,
+  saveInvoiceToDB,
+  saveVendorToDB,
+  recordPaymentInDB,
+  deleteInvoiceFromDB,
+  saveDailyPaymentToDB,
+  deleteDailyPaymentFromDB,
+} from '../services/api';
 
 interface FinanceContextType {
   invoices: Invoice[];
@@ -30,11 +43,13 @@ interface FinanceContextType {
   currentRole: UserRole;
   currentUser: UserProfile;
   currentCurrency: CurrencyCode;
+  appMode: AppMode;
   emailTemplates: EmailReminderTemplate[];
   paymentBatches: PaymentBatch[];
   unreadNotificationsCount: number;
   
   // Actions
+  setAppMode: (mode: AppMode) => void;
   setCurrentRole: (role: UserRole) => void;
   setCurrentCurrency: (currency: CurrencyCode) => void;
   addInvoice: (invoiceData: Omit<Invoice, 'id' | 'auditHistory' | 'baseAmountUSD' | 'remindersSentCount'>) => Invoice;
@@ -85,15 +100,24 @@ interface FinanceContextType {
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
-const STORAGE_KEY_INVOICES = 'ledgerflow_real_ledger_v8';
-const STORAGE_KEY_VENDORS = 'ledgerflow_real_ledger_v8_vnd';
-const STORAGE_KEY_NOTIFS = 'ledgerflow_real_ledger_v8_notif';
-const STORAGE_KEY_ROLE = 'ledgerflow_real_ledger_v8_role';
-const STORAGE_KEY_CURR = 'ledgerflow_real_ledger_v8_curr';
-const STORAGE_KEY_BATCHES = 'ledgerflow_real_ledger_v8_batch';
-const STORAGE_KEY_DAILY_PAYMENTS = 'ledgerflow_daily_payments_v2';
+const STORAGE_KEY_INVOICES       = 'ledgerflow_real_ledger_v9';
+const STORAGE_KEY_VENDORS        = 'ledgerflow_real_ledger_v9_vnd';
+const STORAGE_KEY_NOTIFS         = 'ledgerflow_real_ledger_v9_notif';
+const STORAGE_KEY_ROLE           = 'ledgerflow_real_ledger_v9_role';
+const STORAGE_KEY_CURR           = 'ledgerflow_real_ledger_v9_curr';
+const STORAGE_KEY_BATCHES        = 'ledgerflow_real_ledger_v9_batch';
+const STORAGE_KEY_DAILY_PAYMENTS = 'ledgerflow_daily_payments_v3';
+const STORAGE_KEY_APP_MODE       = 'ledgerflow_app_mode_v1';
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [appMode, setAppModeState] = useState<AppMode>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_APP_MODE);
+      return saved === 'advanced' ? 'advanced' : 'simple';
+    } catch {
+      return 'simple';
+    }
+  });
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_INVOICES);
@@ -187,6 +211,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `dpay_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
     };
     setDailyPayments((prev) => [newRecord, ...prev]);
+    saveDailyPaymentToDB(newRecord).catch(() => {});
   };
 
   const updateDailyPayment = (id: string, updates: Partial<StandalonePaymentRecord>) => {
@@ -197,6 +222,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const deleteDailyPayment = (id: string) => {
     setDailyPayments((prev) => prev.filter((dp) => dp.id !== id));
+    deleteDailyPaymentFromDB(id).catch(() => {});
   };
 
   // Persist state changes
@@ -235,8 +261,41 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [currentCurrency]);
 
   useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_APP_MODE, appMode);
+  }, [appMode]);
+
+  const setAppMode = (mode: AppMode) => {
+    setAppModeState(mode);
+  };
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY_BATCHES, JSON.stringify(paymentBatches));
   }, [paymentBatches]);
+
+  // Initial MySQL database sync on mount
+  useEffect(() => {
+    const syncWithMySQL = async () => {
+      try {
+        const [dbInvoices, dbVendors, dbDailyPayments] = await Promise.all([
+          fetchInvoicesFromDB(),
+          fetchVendorsFromDB(),
+          fetchDailyPaymentsFromDB(),
+        ]);
+        if (dbInvoices && dbInvoices.length > 0) {
+          setInvoices(dbInvoices);
+        }
+        if (dbVendors && dbVendors.length > 0) {
+          setVendors(dbVendors);
+        }
+        if (dbDailyPayments && dbDailyPayments.length > 0) {
+          setDailyPayments(dbDailyPayments);
+        }
+      } catch {
+        // Fallback to local storage mode
+      }
+    };
+    syncWithMySQL();
+  }, []);
 
   const currentUser = useMemo(() => {
     return USER_PROFILES.find((p) => p.role === currentRole) || USER_PROFILES[0];
@@ -259,7 +318,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   ): Invoice => {
     const baseAmountUSD = convertToUSD(invoiceData.totalAmount, invoiceData.currency);
     const newId = `inv_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
 
     const newInvoice: Invoice = {
       ...invoiceData,
@@ -281,6 +340,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setInvoices((prev) => [newInvoice, ...prev]);
+    saveInvoiceToDB(newInvoice).catch(() => {});
 
     // Add notification
     const newNotif: NotificationItem = {
@@ -298,7 +358,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateInvoice = (id: string, updates: Partial<Invoice>, auditNote?: string) => {
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id !== id) return inv;
@@ -336,6 +396,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!target) return false;
 
     setInvoices((prev) => prev.filter((i) => i.id !== id));
+    deleteInvoiceFromDB(id).catch(() => {});
 
     setVendors((prev) =>
       prev.map((v) => {
@@ -364,7 +425,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return false;
     }
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id !== id) return inv;
@@ -405,7 +466,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const target = invoices.find((i) => i.id === id);
     if (!target) return false;
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id !== id) return inv;
@@ -447,7 +508,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!target) return;
 
     const remainingToPay = target.remainingBalance !== undefined ? target.remainingBalance : target.totalAmount - (target.amountPaid || 0);
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const ref = `${method.toUpperCase()}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const settleUSD = convertToUSD(remainingToPay, target.currency);
@@ -504,6 +565,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
     );
 
+    // Persist full payment to MySQL
+    recordPaymentInDB(invoiceId, {
+      amount: remainingToPay,
+      amountUSD: settleUSD,
+      paymentDate: effectiveDate.slice(0, 10),
+      paymentMethod: method,
+      reference: ref,
+      notes: paymentDate ? `Backdated payment applied (${paymentDate})` : 'Full balance settlement',
+      recordedBy: `${currentUser.name} (${currentUser.title})`,
+    }).catch(() => {});
+
     setNotifications((prev) => [
       {
         id: `notif_${Date.now()}`,
@@ -536,7 +608,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newRemaining = Math.max(0, target.totalAmount - newAmountPaid);
     const newStatus: InvoiceStatus = newRemaining === 0 ? 'paid' : 'partially_paid';
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const ref = reference || `${method.toUpperCase()}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const settleAmountUSD = convertToUSD(settleAmount, target.currency);
@@ -596,6 +668,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
     );
 
+    // Persist partial payment to MySQL
+    recordPaymentInDB(invoiceId, {
+      amount: settleAmount,
+      amountUSD: settleAmountUSD,
+      paymentDate: effectiveDate.slice(0, 10),
+      paymentMethod: method,
+      reference: ref,
+      notes: notes || (paymentDate ? `Backdated installment (${paymentDate})` : undefined),
+      recordedBy: `${currentUser.name} (${currentUser.title})`,
+    }).catch(() => {});
+
     setNotifications((prev) => [
       {
         id: `notif_${Date.now()}`,
@@ -635,7 +718,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: `pay_synth_${target.id}`,
           amount: target.amountPaid,
           amountUSD: convertToUSD(target.amountPaid, target.currency),
-          paymentDate: target.paidAt || new Date().toISOString().slice(0, 10),
+          paymentDate: target.paidAt || todayPhnomPenh(),
           paymentMethod: (target.paymentMethod as PaymentMethod) || 'bank_transfer',
           reference: target.paymentReference || `PAY-${target.invoiceNumber}`,
           recordedBy: `${currentUser.name} (${currentUser.title})`,
@@ -681,7 +764,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ? newPartialPayments.reduce((latest, p) => p.paymentDate > latest ? p.paymentDate : latest, newPartialPayments[0].paymentDate)
       : undefined;
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
 
     setInvoices((prev) =>
       prev.map((inv) => {
@@ -728,7 +811,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           id: paymentId,
           amount: target.amountPaid,
           amountUSD: convertToUSD(target.amountPaid, target.currency),
-          paymentDate: target.paidAt || new Date().toISOString().slice(0, 10),
+          paymentDate: target.paidAt || todayPhnomPenh(),
           paymentMethod: (target.paymentMethod as PaymentMethod) || 'bank_transfer',
           reference: target.paymentReference || `PAY-${target.invoiceNumber}`,
           recordedBy: `${currentUser.name} (${currentUser.title})`,
@@ -754,7 +837,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ? newPartialPayments.reduce((latest, p) => p.paymentDate > latest ? p.paymentDate : latest, newPartialPayments[0].paymentDate)
       : undefined;
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
 
     setInvoices((prev) =>
       prev.map((inv) => {
@@ -785,7 +868,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const executeBulkPayment = (invoiceIds: string[], method: PaymentMethod): PaymentBatch => {
     const targets = invoices.filter((i) => invoiceIds.includes(i.id));
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     const batchNum = `BATCH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const totalUSD = targets.reduce((sum, inv) => {
       const rem = inv.remainingBalance !== undefined ? inv.remainingBalance : inv.totalAmount - (inv.amountPaid || 0);
@@ -892,7 +975,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     notes?: string,
     paymentDate?: string
   ): PaymentBatch => {
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     const effectiveDate = paymentDate ? (paymentDate.includes('T') ? paymentDate.replace('T', ' ').slice(0, 16) : `${paymentDate} 12:00`) : nowStr;
     const batchNum = `SPLIT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -1028,7 +1111,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const target = invoices.find((i) => i.id === invoiceId);
     if (!target) return;
 
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    const nowStr = nowPhnomPenh();
     const tmpl = EMAIL_TEMPLATES.find((t) => t.id === templateId);
 
     setInvoices((prev) =>
@@ -1075,6 +1158,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       openInvoicesCount: 0,
     };
     setVendors((prev) => [newVendor, ...prev]);
+    // Persist to MySQL
+    saveVendorToDB(newVendor).catch(() => {});
     return newVendor;
   };
 
@@ -1114,9 +1199,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         currentRole,
         currentUser,
         currentCurrency,
+        appMode,
         emailTemplates: EMAIL_TEMPLATES,
         paymentBatches,
         unreadNotificationsCount,
+        setAppMode,
         setCurrentRole,
         setCurrentCurrency,
         addInvoice,

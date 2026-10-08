@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { Invoice } from '../types/finance';
 import { formatCurrency } from '../utils/currency';
@@ -29,7 +30,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
 
   // Quick Add Purchase Form
   const [newInvoiceNum, setNewInvoiceNum] = useState<string>('');
-  const [newDate, setNewDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [newDate, setNewDate] = useState<string>(todayPhnomPenh());
   const [newAmount, setNewAmount] = useState<string>('');
   const [newSupplier, setNewSupplier] = useState<string>('S4 LH');
   const [showAddForm, setShowAddForm] = useState<boolean>(true);
@@ -72,7 +73,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
       vendorName: supplierToUse,
       vendorCategory: vendor?.category || 'Electronics & Mobile',
       issueDate: newDate,
-      dueDate: new Date(new Date(newDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      dueDate: toPhnomPenhDate(new Date(new Date(newDate).getTime() + 30 * 24 * 60 * 60 * 1000)),
       currency: 'USD',
       subtotal: amount,
       taxAmount: 0,
@@ -120,7 +121,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Purchases_${selectedSupplier.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Purchases_${selectedSupplier.replace(/\s+/g, '_')}_${todayPhnomPenh()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -245,7 +246,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                   <div className="flex items-center gap-1 text-[10px]">
                     <button
                       type="button"
-                      onClick={() => setNewDate(new Date().toISOString().slice(0, 10))}
+                      onClick={() => setNewDate(todayPhnomPenh())}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
                       Today
@@ -255,7 +256,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 1);
-                        setNewDate(d.toISOString().slice(0, 10));
+                        setNewDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -266,7 +267,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 3);
-                        setNewDate(d.toISOString().slice(0, 10));
+                        setNewDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -277,7 +278,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 7);
-                        setNewDate(d.toISOString().slice(0, 10));
+                        setNewDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -288,7 +289,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setMonth(d.getMonth() - 1);
-                        setNewDate(d.toISOString().slice(0, 10));
+                        setNewDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >

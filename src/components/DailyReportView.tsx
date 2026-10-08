@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { todayPhnomPenh } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { DailyReportRow, PaymentMethod } from '../types/finance';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, convertToUSD, convertFromUSD } from '../utils/currency';
 import {
   Calendar,
   Download,
@@ -34,7 +35,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
 
   // New Payment Quick Dialog
   const [showAddPaymentModal, setShowAddPaymentModal] = useState<boolean>(false);
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState<string>(todayPhnomPenh());
   const [paymentSupplier, setPaymentSupplier] = useState<string>('S4 LH');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('aba_pay');
@@ -78,7 +79,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
         });
       }
       const entry = map.get(key)!;
-      entry.totalPurchase += inv.totalAmount;
+      entry.totalPurchase += convertFromUSD(convertToUSD(inv.totalAmount, inv.currency), currentCurrency);
       entry.invoices.push(inv);
 
       // Also if invoice had partial or full payments recorded on specific dates
@@ -98,7 +99,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
             });
           }
           const payEntry = map.get(payKey)!;
-          payEntry.totalPayment += p.amount;
+          payEntry.totalPayment += convertFromUSD(convertToUSD(p.amount, inv.currency), currentCurrency);
           payEntry.payments.push({
             amount: p.amount,
             reference: p.reference,
@@ -146,7 +147,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
     });
 
     return rows;
-  }, [invoices, dailyPayments]);
+  }, [invoices, dailyPayments, currentCurrency]);
 
   // Filtered rows based on selected supplier and date range
   const filteredRows = useMemo(() => {
@@ -226,7 +227,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Daily_Report_${selectedSupplier.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Daily_Report_${selectedSupplier.replace(/\s+/g, '_')}_${todayPhnomPenh()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -665,7 +666,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({ onClose, isMod
                 <label className="font-semibold text-slate-700 block mb-1">Reference / Voucher No.</label>
                 <input
                   type="text"
-                  placeholder={`e.g. ABA-${paymentSupplier.replace(/[^a-zA-Z0-9]/g, '')}-${new Date().toISOString().slice(5, 10).replace('-', '')}`}
+                  placeholder={`e.g. ABA-${paymentSupplier.replace(/[^a-zA-Z0-9]/g, '')}-${todayPhnomPenh().slice(5, 10).replace('-', '')}`}
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
                   className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono bg-white"

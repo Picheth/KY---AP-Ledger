@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { CurrencyCode, Invoice, InvoiceLineItem } from '../types/finance';
 import {
@@ -24,7 +25,8 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
   onClose,
   onCreated,
 }) => {
-  const { vendors, addInvoice, invoices } = useFinance();
+  const { vendors, addInvoice, invoices, appMode } = useFinance();
+  const isSimple = appMode === 'simple';
 
   const [isScanning, setIsScanning] = useState(false);
   const [vendorName, setVendorName] = useState('');
@@ -56,7 +58,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
       label: '📱 S4 LH (Phones, Tablets, Accessories) - S4-YYYYMMDD',
       vendor: 'S4 LH',
       category: 'Mobile Phones, Tablets and Accessories',
-      invNum: `S4-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      invNum: `S4-${todayPhnomPenh().replace(/-/g, '')}`,
       poNum: 'PO-2026-S4-101',
       curr: 'USD' as CurrencyCode,
       dept: 'Mobile Phone & Tablet Division',
@@ -240,13 +242,13 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
       amountPaid: 0,
       remainingBalance: totalAmount,
       partialPayments: [],
-      status: 'pending_approval',
+      status: isSimple ? 'approved' : 'pending_approval',
       paymentTerms,
       department,
       assignedApproverRole: totalAmount > 50000 ? 'cfo' : 'dept_manager',
       threeWayMatched,
       lineItems,
-      notes: 'Automated OCR optical parsing verified. Routed to approval queue.',
+      notes: isSimple ? 'Direct bill entry recorded in ledger.' : 'Automated OCR optical parsing verified. Routed to approval queue.',
     });
 
     onCreated(created);
@@ -261,13 +263,15 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div>
             <div className="flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-slate-900" />
+              <Cpu className="w-5 h-5 text-indigo-600" />
               <h3 className="text-base font-bold text-slate-900">
-                Automated Invoice Intake & OCR Processor
+                {isSimple ? 'Record Supplier Bill / Purchase' : 'Automated Invoice Intake & OCR Processor'}
               </h3>
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              Optical character recognition extracts vendor, line items, and matches PO reference
+              {isSimple
+                ? 'Enter purchase receipt details to track what you owe and record payments in USD or KHR'
+                : 'Optical character recognition extracts vendor, line items, and matches PO reference'}
             </div>
           </div>
           <button
@@ -355,7 +359,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                 <div className="flex flex-wrap items-center gap-1 mt-1.5">
                   <span className="text-[10px] text-slate-400 font-medium">Shop Vendors:</span>
                   {[
-                    { name: 'S4 LH', category: 'Mobile Phones, Tablets and Accessories', format: 'S4-YYYYMMDD', genInv: () => `S4-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}` },
+                    { name: 'S4 LH', category: 'Mobile Phones, Tablets and Accessories', format: 'S4-YYYYMMDD', genInv: () => `S4-${todayPhnomPenh().replace(/-/g, '')}` },
                     { name: 'S3 PLP', category: 'Mobile Phones (second-hand)', format: 'PLP-xxxxx', genInv: () => `PLP-${Math.floor(10000 + Math.random() * 90000)}` },
                     { name: 'S3 PLP-NEW', category: 'Mobile Phone (New)', format: 'PLN-xxxxx', genInv: () => `PLN-${Math.floor(10000 + Math.random() * 90000)}` },
                     { name: 'S5 DN', category: 'Accessories', format: 'DN-xxxxx', genInv: () => `DN-${Math.floor(10000 + Math.random() * 90000)}` },
@@ -426,7 +430,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                   </span>
                 ) : vendorName.includes('S4') ? (
                   <span className="text-[10px] text-indigo-700 font-mono mt-0.5 block">
-                    Format: <strong>S4-YYYYMMDD</strong> (e.g. S4-{new Date().toISOString().slice(0, 10).replace(/-/g, '')})
+                    Format: <strong>S4-YYYYMMDD</strong> (e.g. S4-{todayPhnomPenh().replace(/-/g, '')})
                   </span>
                 ) : vendorName.includes('PLP') ? (
                   <span className="text-[10px] text-indigo-700 font-mono mt-0.5 block">
@@ -510,9 +514,9 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const today = new Date().toISOString().slice(0, 10);
+                        const today = todayPhnomPenh();
                         setIssueDate(today);
-                        setDueDate(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+                        setDueDate(toPhnomPenhDate(new Date(Date.now() + 30 * 86400000)));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                     >
@@ -523,9 +527,9 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 1);
-                        const s = d.toISOString().slice(0, 10);
+                        const s = toPhnomPenhDate(d);
                         setIssueDate(s);
-                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                        setDueDate(toPhnomPenhDate(new Date(d.getTime() + 30 * 86400000)));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                     >
@@ -536,9 +540,9 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 7);
-                        const s = d.toISOString().slice(0, 10);
+                        const s = toPhnomPenhDate(d);
                         setIssueDate(s);
-                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                        setDueDate(toPhnomPenhDate(new Date(d.getTime() + 30 * 86400000)));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                     >
@@ -549,9 +553,9 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                       onClick={() => {
                         const d = new Date();
                         d.setMonth(d.getMonth() - 1);
-                        const s = d.toISOString().slice(0, 10);
+                        const s = toPhnomPenhDate(d);
                         setIssueDate(s);
-                        setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                        setDueDate(toPhnomPenhDate(new Date(d.getTime() + 30 * 86400000)));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                     >
@@ -566,7 +570,7 @@ export const InvoiceIntakeModal: React.FC<InvoiceIntakeModalProps> = ({
                     const newIssue = e.target.value;
                     setIssueDate(newIssue);
                     if (newIssue) {
-                      setDueDate(new Date(new Date(newIssue).getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      setDueDate(toPhnomPenhDate(new Date(new Date(newIssue).getTime() + 30 * 86400000)));
                     }
                   }}
                   className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md font-mono text-slate-800 focus:outline-none focus:border-slate-500"

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '../context/FinanceContext';
 import { Vendor, PaymentMethod } from '../types/finance';
-import { formatCurrency, convertFromUSD } from '../utils/currency';
+import { formatCurrency, convertFromUSD, convertToUSD } from '../utils/currency';
+import { DollarSign, Wallet, AlertTriangle } from 'lucide-react';
 import {
   Search,
   Filter,
@@ -187,6 +188,20 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
           const spendDisplay = convertFromUSD(vendor.totalSpendUSD, currentCurrency);
           const isPreferred = vendor.status === 'preferred';
 
+          // Calculate balance owed for this vendor
+          const vendorOpenInvoices = invoices.filter(
+            (i) => (i.vendorId === vendor.id || i.vendorName === vendor.name) && i.status !== 'paid'
+          );
+          const balanceOwedUSD = vendorOpenInvoices.reduce((sum, inv) => {
+            // Use remainingBalance if available, otherwise totalAmount - amountPaid
+            const remaining = inv.remainingBalance != null ? inv.remainingBalance : (inv.totalAmount - (inv.amountPaid || 0));
+            return sum + convertToUSD(remaining, inv.currency);
+          }, 0);
+          const totalPaidUSD = invoices
+            .filter((i) => i.vendorId === vendor.id || i.vendorName === vendor.name)
+            .reduce((sum, inv) => sum + convertToUSD(inv.amountPaid || 0, inv.currency), 0);
+          const balanceDisplay = convertFromUSD(balanceOwedUSD, currentCurrency);
+
           return (
             <div
               key={vendor.id}
@@ -209,7 +224,39 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                {/* Balance Owed Highlight */}
+                <div className={`mt-3 p-3 rounded-lg border ${
+                  balanceOwedUSD > 0
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-emerald-50 border-emerald-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      {balanceOwedUSD > 0 ? (
+                        <Wallet className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      )}
+                      <span className={`text-[11px] font-semibold ${
+                        balanceOwedUSD > 0 ? 'text-red-700' : 'text-emerald-700'
+                      }`}>
+                        {balanceOwedUSD > 0 ? 'Balance Owed' : 'Fully Paid'}
+                      </span>
+                    </div>
+                    <span className={`text-sm font-mono font-bold tabular-nums ${
+                      balanceOwedUSD > 0 ? 'text-red-700' : 'text-emerald-700'
+                    }`}>
+                      {formatCurrency(balanceDisplay, currentCurrency)}
+                    </span>
+                  </div>
+                  {balanceOwedUSD > 0 && (
+                    <div className="text-[10px] text-red-500 mt-1 font-mono">
+                      {vendorOpenInvoices.length} unpaid bill{vendorOpenInvoices.length !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <div className="text-slate-400 text-[11px]">Lifetime Spend</div>
                     <div className="font-mono font-semibold text-slate-900 tabular-nums">
@@ -234,7 +281,7 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
                   <div>
                     <div className="text-slate-400 text-[11px]">Open Invoices</div>
                     <div className="font-mono text-slate-800">
-                      {invoices.filter((i) => (i.vendorId === vendor.id || i.vendorName === vendor.name) && i.status !== 'paid').length} open
+                      {vendorOpenInvoices.length} open
                     </div>
                   </div>
                 </div>
@@ -280,6 +327,73 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
 
               {/* Drawer Body */}
               <div className="p-5 space-y-5 text-xs">
+
+                {/* Balance Summary Section */}
+                {(() => {
+                  const openInvs = vendorInvoices.filter((i) => i.status !== 'paid');
+                  const drawerBalance = openInvs.reduce((sum, inv) => {
+                    const remaining = inv.remainingBalance != null ? inv.remainingBalance : (inv.totalAmount - (inv.amountPaid || 0));
+                    return sum + convertToUSD(remaining, inv.currency);
+                  }, 0);
+                  const drawerTotalBilled = vendorInvoices.reduce((sum, inv) => sum + convertToUSD(inv.totalAmount, inv.currency), 0);
+                  const drawerTotalPaid = vendorInvoices.reduce((sum, inv) => sum + convertToUSD(inv.amountPaid || 0, inv.currency), 0);
+                  const balDisplay = convertFromUSD(drawerBalance, currentCurrency);
+                  const billedDisplay = convertFromUSD(drawerTotalBilled, currentCurrency);
+                  const paidDisplay = convertFromUSD(drawerTotalPaid, currentCurrency);
+
+                  return (
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                      {/* Balance header */}
+                      <div className={`p-4 ${drawerBalance > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {drawerBalance > 0 ? (
+                              <AlertTriangle className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <CheckCircle className="w-5 h-5 text-emerald-500" />
+                            )}
+                            <span className={`text-sm font-bold ${
+                              drawerBalance > 0 ? 'text-red-700' : 'text-emerald-700'
+                            }`}>
+                              {drawerBalance > 0 ? 'Balance Owed' : 'All Bills Settled'}
+                            </span>
+                          </div>
+                          <span className={`text-lg font-mono font-bold tabular-nums ${
+                            drawerBalance > 0 ? 'text-red-700' : 'text-emerald-700'
+                          }`}>
+                            {formatCurrency(balDisplay, currentCurrency)}
+                          </span>
+                        </div>
+                        {drawerBalance > 0 && (
+                          <div className="text-[11px] text-red-500 mt-1">
+                            {openInvs.length} unpaid bill{openInvs.length !== 1 ? 's' : ''} outstanding
+                          </div>
+                        )}
+                      </div>
+                      {/* Summary row */}
+                      <div className="grid grid-cols-3 divide-x divide-slate-200 bg-white">
+                        <div className="p-3 text-center">
+                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Total Billed</div>
+                          <div className="font-mono font-semibold text-slate-900 mt-0.5 tabular-nums">
+                            {formatCurrency(billedDisplay, currentCurrency)}
+                          </div>
+                        </div>
+                        <div className="p-3 text-center">
+                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Total Paid</div>
+                          <div className="font-mono font-semibold text-emerald-700 mt-0.5 tabular-nums">
+                            {formatCurrency(paidDisplay, currentCurrency)}
+                          </div>
+                        </div>
+                        <div className="p-3 text-center">
+                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Invoices</div>
+                          <div className="font-mono font-semibold text-slate-900 mt-0.5">
+                            {vendorInvoices.length}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 
                 {/* Contact & Banking Details */}
                 <div className="space-y-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
@@ -322,21 +436,34 @@ export const VendorsView: React.FC<VendorsViewProps> = ({
                         No invoices recorded for this vendor.
                       </div>
                     ) : (
-                      vendorInvoices.map((inv) => (
-                        <div
-                          key={inv.id}
-                          onClick={() => onSelectInvoice(inv.id)}
-                          className="p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between"
-                        >
-                          <div>
-                            <div className="font-mono font-medium text-slate-900">{inv.invoiceNumber}</div>
-                            <div className="text-[11px] text-slate-400">Due {inv.dueDate} · {inv.status}</div>
+                      vendorInvoices.map((inv) => {
+                        const invRemaining = inv.remainingBalance != null ? inv.remainingBalance : (inv.totalAmount - (inv.amountPaid || 0));
+                        return (
+                          <div
+                            key={inv.id}
+                            onClick={() => onSelectInvoice(inv.id)}
+                            className="p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-mono font-medium text-slate-900">{inv.invoiceNumber}</div>
+                              <div className="text-[11px] text-slate-400">Due {inv.dueDate} · {inv.status}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono tabular-nums font-semibold text-slate-900">
+                                {formatCurrency(inv.totalAmount, inv.currency)}
+                              </div>
+                              {inv.status !== 'paid' && invRemaining > 0 && (
+                                <div className="text-[10px] font-mono text-red-500">
+                                  owes {formatCurrency(invRemaining, inv.currency)}
+                                </div>
+                              )}
+                              {inv.status === 'paid' && (
+                                <div className="text-[10px] font-mono text-emerald-600">paid ✓</div>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right font-mono tabular-nums font-semibold text-slate-900">
-                            {formatCurrency(inv.totalAmount, inv.currency)}
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

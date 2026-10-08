@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { Invoice, PaymentMethod } from '../types/finance';
 import { formatCurrency, convertFromUSD } from '../utils/currency';
@@ -19,7 +20,9 @@ import {
   Split,
   ChevronRight,
   ArrowRight,
+  Edit2,
 } from 'lucide-react';
+import { EditInvoiceModal } from './EditInvoiceModal';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
@@ -50,11 +53,13 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   
   // Partial payment state
   const [showPartialPay, setShowPartialPay] = useState(false);
-  const [partialPaymentDate, setPartialPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [fullPaymentDate, setFullPaymentDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [partialPaymentDate, setPartialPaymentDate] = useState<string>(todayPhnomPenh());
+  const [fullPaymentDate, setFullPaymentDate] = useState<string>(todayPhnomPenh());
   const [partialAmountInput, setPartialAmountInput] = useState<string>('');
   const [partialNotes, setPartialNotes] = useState('');
   const [partialRef, setPartialRef] = useState('');
+  const [settlementSuccessMsg, setSettlementSuccessMsg] = useState<string | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
 
   if (!invoice) return null;
 
@@ -88,9 +93,11 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   };
 
   const handlePayFull = () => {
+    const finalAmount = remainingBalance;
     executePayment(invoice.id, selectedPayMethod, fullPaymentDate);
     setShowPayOptions(false);
-    onClose();
+    setSettlementSuccessMsg(`🎉 Pay-Off Complete! Disbursed final balance of ${formatCurrency(finalAmount, invoice.currency)}. Invoice is now fully settled ($0.00).`);
+    setTimeout(() => setSettlementSuccessMsg(null), 6000);
   };
 
   const handleExecutePartial = () => {
@@ -104,16 +111,32 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
       return;
     }
 
+    const trancheDate = partialPaymentDate || todayPhnomPenh();
+    const ref = partialRef.trim() || undefined;
+    const notes = partialNotes.trim() || undefined;
+
     executePartialPayment(
       invoice.id,
       numericAmt,
       selectedPayMethod,
-      partialRef.trim() || undefined,
-      partialNotes.trim() || undefined,
-      partialPaymentDate
+      ref,
+      notes,
+      trancheDate
     );
-    setShowPartialPay(false);
-    onClose();
+
+    const newRem = Math.max(0, remainingBalance - numericAmt);
+    if (newRem <= 0.001) {
+      setSettlementSuccessMsg(`🎉 Pay-Off Complete! Tranche of ${formatCurrency(numericAmt, invoice.currency)} settled the final balance! Invoice is 100% paid.`);
+      setShowPartialPay(false);
+    } else {
+      setSettlementSuccessMsg(`✅ Settlement installment of ${formatCurrency(numericAmt, invoice.currency)} recorded! Remaining open balance: ${formatCurrency(newRem, invoice.currency)}.`);
+      // Preset next tranche suggestion
+      setPartialAmountInput(newRem.toFixed(2));
+    }
+
+    setPartialRef('');
+    setPartialNotes('');
+    setTimeout(() => setSettlementSuccessMsg(null), 6000);
   };
 
   const setPresetPercent = (pct: number) => {
@@ -122,6 +145,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full border border-slate-200 overflow-hidden my-8">
         
@@ -160,6 +184,14 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsEditOpen(true)}
+              className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors flex items-center gap-1"
+              title="Edit invoice details"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+            <button
               onClick={() => window.print()}
               className="p-1.5 text-slate-500 hover:text-slate-800 rounded-md transition-colors"
               title="Print Remittance"
@@ -178,6 +210,22 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           
+          {settlementSuccessMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{settlementSuccessMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettlementSuccessMsg(null)}
+                className="text-emerald-700 hover:text-emerald-900 text-xs px-2 py-0.5 rounded"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Vendor & Payment Terms Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
             <div>
@@ -470,7 +518,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                     <div className="flex items-center gap-1 text-[10px]">
                       <button
                         type="button"
-                        onClick={() => setPartialPaymentDate(new Date().toISOString().slice(0, 10))}
+                        onClick={() => setPartialPaymentDate(todayPhnomPenh())}
                         className="px-1.5 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
                       >
                         Today
@@ -480,7 +528,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                         onClick={() => {
                           const d = new Date();
                           d.setDate(d.getDate() - 1);
-                          setPartialPaymentDate(d.toISOString().slice(0, 10));
+                          setPartialPaymentDate(toPhnomPenhDate(d));
                         }}
                         className="px-1.5 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
                       >
@@ -746,5 +794,12 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
       </div>
     </div>
+
+    <EditInvoiceModal
+      isOpen={isEditOpen}
+      onClose={() => setIsEditOpen(false)}
+      invoice={invoice}
+    />
+  </>
   );
 };

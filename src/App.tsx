@@ -12,22 +12,26 @@ import { SettlementDetailsView } from './components/SettlementDetailsView';
 import { SettlementReportModal } from './components/SettlementReportModal';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { InvoiceIntakeModal } from './components/InvoiceIntakeModal';
+import { QuickAddPurchaseModal } from './components/QuickAddPurchaseModal';
 import { BulkPaymentModal } from './components/BulkPaymentModal';
 import { AuditReportsModal } from './components/AuditReportsModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
+import { DatabaseStatusModal } from './components/DatabaseStatusModal';
 import { Invoice } from './types/finance';
 
 function MainApp() {
-  const { invoices } = useFinance();
+  const { invoices, appMode } = useFinance();
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isIntakeOpen, setIsIntakeOpen] = useState<boolean>(false);
+  const [isQuickPurchaseOpen, setIsQuickPurchaseOpen] = useState<boolean>(false);
   const [isBulkPayOpen, setIsBulkPayOpen] = useState<boolean>(false);
   const [bulkPayPreselectedIds, setBulkPayPreselectedIds] = useState<string[]>([]);
   const [selectedSupplierForSettlement, setSelectedSupplierForSettlement] = useState<string | undefined>(undefined);
   const [isAuditReportsOpen, setIsAuditReportsOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
   const [invoicesInitialFilter, setInvoicesInitialFilter] = useState<string>('all');
   const [reminderTargetInvoiceId, setReminderTargetInvoiceId] = useState<string | undefined>(undefined);
   const [selectedPurchasesSupplier, setSelectedPurchasesSupplier] = useState<string>('All Suppliers');
@@ -67,8 +71,10 @@ function MainApp() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenIntake={() => setIsIntakeOpen(true)}
+        onOpenQuickPurchase={() => setIsQuickPurchaseOpen(true)}
         onOpenAudit={() => setIsAuditReportsOpen(true)}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenDatabase={() => setIsDbModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -146,19 +152,41 @@ function MainApp() {
       <footer className="border-t border-slate-200 bg-white py-4 mt-8 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-900">LedgerFlow AP & Financial Oversight</span>
+            <span className="font-semibold text-slate-900">
+              {appMode === 'simple' ? 'KY Store · Small Business AP Ledger' : 'LedgerFlow AP & Financial Oversight'}
+            </span>
             <span aria-hidden="true">·</span>
-            <span>SOX 404 & GAAP Treasury Compliance</span>
+            <span>{appMode === 'simple' ? 'Simple Accounting Format · USD ($) & KHR (៛)' : 'SOX 404 & GAAP Treasury Compliance'}</span>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsAuditReportsOpen(true)}
-              className="hover:text-slate-900 underline"
-            >
-              Export Monthly Audit Report
-            </button>
-            <span aria-hidden="true">·</span>
-            <span>Multi-Currency Treasury Core</span>
+            {appMode === 'simple' ? (
+              <>
+                <button
+                  onClick={() => setActiveTab('daily-report')}
+                  className="hover:text-slate-900 underline"
+                >
+                  Daily Cashbook
+                </button>
+                <span aria-hidden="true">·</span>
+                <button
+                  onClick={() => setIsSettlementReportOpen(true)}
+                  className="hover:text-slate-900 underline"
+                >
+                  Supplier Statement
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsAuditReportsOpen(true)}
+                  className="hover:text-slate-900 underline"
+                >
+                  Export Monthly Audit Report
+                </button>
+                <span aria-hidden="true">·</span>
+                <span>Multi-Currency Treasury Core</span>
+              </>
+            )}
           </div>
         </div>
       </footer>
@@ -174,6 +202,15 @@ function MainApp() {
         isOpen={isIntakeOpen}
         onClose={() => setIsIntakeOpen(false)}
         onCreated={(inv) => setSelectedInvoiceId(inv.id)}
+      />
+
+      <QuickAddPurchaseModal
+        isOpen={isQuickPurchaseOpen}
+        onClose={() => setIsQuickPurchaseOpen(false)}
+        onCreated={(inv) => {
+          setSelectedSettlementInvoiceId(inv.id);
+          setActiveTab('settlement');
+        }}
       />
 
       <BulkPaymentModal
@@ -205,6 +242,11 @@ function MainApp() {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         onSelectInvoice={(id) => setSelectedInvoiceId(id)}
+      />
+
+      <DatabaseStatusModal
+        isOpen={isDbModalOpen}
+        onClose={() => setIsDbModalOpen(false)}
       />
 
     </div>

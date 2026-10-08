@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
-import { formatCurrency } from '../utils/currency';
+import { formatCurrency, convertToUSD, convertFromUSD } from '../utils/currency';
 import { PaymentMethod } from '../types/finance';
 import { X, Download, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
 
@@ -73,6 +74,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
       paymentMethod: PaymentMethod | string;
       reference?: string;
       notes?: string;
+      currency: 'USD' | 'KHR';
     }[] = [];
 
     // From invoices that have payments or partial payments
@@ -95,6 +97,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
             paymentMethod: p.paymentMethod,
             reference: p.reference,
             notes: p.notes,
+            currency: inv.currency,
           });
         });
       } else if (inv.status === 'paid' && inv.paidAt) {
@@ -112,6 +115,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
           balance: 0,
           paymentMethod: (inv.paymentMethod as PaymentMethod) || 'bank_transfer',
           reference: inv.paymentReference,
+          currency: inv.currency,
         });
       }
     });
@@ -132,13 +136,14 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
         paymentMethod: dp.paymentMethod,
         reference: dp.reference,
         notes: dp.notes,
+        currency: currentCurrency,
       });
     });
 
     // Sort descending by date
     records.sort((a, b) => b.date.localeCompare(a.date));
     return records;
-  }, [invoices, dailyPayments]);
+  }, [invoices, dailyPayments, currentCurrency]);
 
   const filteredRecords = useMemo(() => {
     return allocationRecords.filter((rec) => {
@@ -156,7 +161,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
   }, [allocationRecords, selectedSupplier, fromDate, toDate]);
 
   const totalAmountPaidInPeriod = useMemo(() => {
-    return filteredRecords.reduce((sum, r) => sum + r.amountPaid, 0);
+    return convertFromUSD(filteredRecords.reduce((sum, r) => sum + convertToUSD(r.amountPaid, r.currency), 0), currentCurrency);
   }, [filteredRecords]);
 
   const handleStartEdit = (rec: any) => {
@@ -357,16 +362,16 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
                       )}
                     </td>
                     <td className="py-3.5 px-4 font-mono tabular-nums text-slate-900 text-right whitespace-nowrap">
-                      {formatCurrency(r.amountDue, currentCurrency)}
+                      {formatCurrency(r.amountDue, r.currency)}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-bold tabular-nums text-emerald-600 text-right whitespace-nowrap">
-                      {formatCurrency(r.amountPaid, currentCurrency)}
+                      {formatCurrency(r.amountPaid, r.currency)}
                     </td>
                     <td className="py-3.5 px-4 font-mono tabular-nums text-slate-900 text-right whitespace-nowrap">
-                      {formatCurrency(r.totalPaid, currentCurrency)}
+                      {formatCurrency(r.totalPaid, r.currency)}
                     </td>
                     <td className="py-3.5 px-4 font-mono tabular-nums text-slate-900 text-right whitespace-nowrap">
-                      {formatCurrency(r.balance, currentCurrency)}
+                      {formatCurrency(r.balance, r.currency)}
                     </td>
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
@@ -442,7 +447,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
                   <div className="flex items-center gap-1 text-[10px]">
                     <button
                       type="button"
-                      onClick={() => setEditDate(new Date().toISOString().slice(0, 10))}
+                      onClick={() => setEditDate(todayPhnomPenh())}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
                       Today
@@ -452,7 +457,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 1);
-                        setEditDate(d.toISOString().slice(0, 10));
+                        setEditDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >
@@ -463,7 +468,7 @@ export const SettlementReportModal: React.FC<SettlementReportModalProps> = ({ is
                       onClick={() => {
                         const d = new Date();
                         d.setDate(d.getDate() - 3);
-                        setEditDate(d.toISOString().slice(0, 10));
+                        setEditDate(toPhnomPenhDate(d));
                       }}
                       className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                     >

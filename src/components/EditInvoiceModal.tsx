@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { todayPhnomPenh, toPhnomPenhDate } from '../utils/datetime';
 import { useFinance } from '../context/FinanceContext';
 import { Invoice, InvoiceStatus, CurrencyCode, PaymentTerms } from '../types/finance';
 import { formatCurrency } from '../utils/currency';
@@ -231,9 +232,9 @@ export const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const today = new Date().toISOString().slice(0, 10);
+                      const today = todayPhnomPenh();
                       setIssueDate(today);
-                      setDueDate(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+                      setDueDate(toPhnomPenhDate(new Date(Date.now() + 30 * 86400000)));
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                   >
@@ -244,9 +245,9 @@ export const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                     onClick={() => {
                       const d = new Date();
                       d.setDate(d.getDate() - 1);
-                      const s = d.toISOString().slice(0, 10);
+                      const s = toPhnomPenhDate(d);
                       setIssueDate(s);
-                      setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      setDueDate(toPhnomPenhDate(new Date(d.getTime() + 30 * 86400000)));
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                   >
@@ -257,9 +258,9 @@ export const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                     onClick={() => {
                       const d = new Date();
                       d.setDate(d.getDate() - 7);
-                      const s = d.toISOString().slice(0, 10);
+                      const s = toPhnomPenhDate(d);
                       setIssueDate(s);
-                      setDueDate(new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                      setDueDate(toPhnomPenhDate(new Date(d.getTime() + 30 * 86400000)));
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
                   >
@@ -275,7 +276,7 @@ export const EditInvoiceModal: React.FC<EditInvoiceModalProps> = ({
                   const newIssue = e.target.value;
                   setIssueDate(newIssue);
                   if (newIssue) {
-                    setDueDate(new Date(new Date(newIssue).getTime() + 30 * 86400000).toISOString().slice(0, 10));
+                    setDueDate(toPhnomPenhDate(new Date(new Date(newIssue).getTime() + 30 * 86400000)));
                   }
                 }}
                 className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-md font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
